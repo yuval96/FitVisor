@@ -182,7 +182,8 @@ class WorkoutActivity :
                             }
                             poseLandmarkerHelper.detectLiveStream(
                                 frameTimeMillis,
-                                mpImage
+                                mpImage,
+                                rotatedBitmap
                             )
                         } catch (exception: Exception) {
                             Log.e(

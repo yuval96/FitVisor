@@ -3,7 +3,6 @@ package com.example.fitvisor__demo
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.google.mediapipe.framework.image.BitmapExtractor
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
@@ -19,6 +18,20 @@ class PoseLandmarkerHelper(
     private var poseLandmarker: PoseLandmarker? = null
     var runtimeDescription: String = "Detector unavailable"
         private set
+
+    /**
+     * The exact bitmap submitted to [detectLiveStream], keyed by the same
+     * timestamp passed to `detectAsync` (which [PoseLandmarkerResult.timestampMs]
+     * echoes back). Used to hand the overlay back the frame it actually
+     * analyzed, instead of [com.google.mediapipe.framework.image.BitmapExtractor]
+     * on the MPImage the result listener receives: that image is reconstructed
+     * by the native graph from its own internal buffer, which is not guaranteed
+     * to have the same pixel layout/row stride as the bitmap we submitted —
+     * extracting it produced visibly corrupted (striped, wrongly scaled) frames
+     * on-device. Keeping our own reference sidesteps that reconstruction
+     * entirely: what's displayed is byte-for-byte what was analyzed.
+     */
+    private val pendingFrames = PendingFrameCache<Bitmap>(PENDING_FRAME_WINDOW_MS)
 
     init {
         setupPoseLandmarker()
@@ -90,29 +103,41 @@ class PoseLandmarkerHelper(
         false
     }
 
+    /**
+     * [frame] is the exact bitmap [image] was built from; it's retained here
+     * (keyed by [timestampMillis]) so [onResults] can hand back the same object
+     * rather than re-extracting one from the result's MPImage. If submission
+     * fails synchronously, the entry is removed immediately so it can't leak.
+     */
     fun detectLiveStream(
         timestampMillis: Long,
-        image: MPImage
+        image: MPImage,
+        frame: Bitmap
     ) {
-        poseLandmarker?.detectAsync(image, timestampMillis)
+        val landmarker = poseLandmarker ?: return
+        pendingFrames.put(timestampMillis, frame)
+        try {
+            landmarker.detectAsync(image, timestampMillis)
+        } catch (e: Exception) {
+            pendingFrames.remove(timestampMillis)
+            throw e
+        }
     }
 
     /** Release the native detector after the workout Activity stops submitting frames. */
     fun close() {
         poseLandmarker?.close()
         poseLandmarker = null
+        pendingFrames.clear()
     }
 
     private fun onResults(result: PoseLandmarkerResult, input: MPImage) {
-        // The input frame is what produced these landmarks; hand it back so the
-        // overlay can display it in sync with the skeleton. Built from a Bitmap
-        // (BitmapImageBuilder), so extraction returns that same bitmap.
-        val frame: Bitmap? = try {
-            BitmapExtractor.extract(input)
-        } catch (e: Exception) {
-            null
-        }
-        listener.onResults(result, frame, input.height, input.width)
+        // The frame that produced these landmarks; see [pendingFrames]. Falls
+        // back to the result's own reported size only if our copy is missing
+        // (e.g. it aged out), so the overlay still gets a plausible size for
+        // skeleton-only rendering.
+        val frame = pendingFrames.take(result.timestampMs())
+        listener.onResults(result, frame, frame?.height ?: input.height, frame?.width ?: input.width)
     }
 
     private fun onError(error: RuntimeException) {
@@ -122,5 +147,10 @@ class PoseLandmarkerHelper(
     interface LandmarkerListener {
         fun onError(error: String)
         fun onResults(result: PoseLandmarkerResult, inputFrame: Bitmap?, imageHeight: Int, imageWidth: Int)
+    }
+
+    companion object {
+        /** Generous vs. typical live-stream latency; just bounds the cache, not a real deadline. */
+        private const val PENDING_FRAME_WINDOW_MS = 5_000L
     }
 }
