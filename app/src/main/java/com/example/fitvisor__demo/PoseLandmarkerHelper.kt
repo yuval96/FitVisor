@@ -1,6 +1,7 @@
 package com.example.fitvisor__demo
 
 import android.content.Context
+import android.util.Log
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
@@ -23,45 +24,41 @@ class PoseLandmarkerHelper(
 
     /**
      * Builds the detector from the user's [AppSettings] (model + GPU delegate),
-     * with graceful fallbacks so a selection that a device can't honor never
-     * crashes the workout:
-     *  - a selected model whose `.task` asset is missing falls back to HEAVY;
-     *  - a GPU-delegate init failure retries on CPU.
-     * Each fallback is surfaced through [LandmarkerListener.onError] for logging.
+     * without substituting models. A GPU initialization failure retries the same
+     * asset on CPU. Missing/corrupt assets leave detection unavailable and report
+     * the requested asset through [LandmarkerListener.onError].
      */
     private fun setupPoseLandmarker() {
         val settings = AppSettings(context)
 
         val requestedModel = settings.model
-        val model = if (assetExists(requestedModel.assetPath)) {
-            requestedModel
-        } else {
-            listener.onError(
-                "${requestedModel.name} model file (${requestedModel.assetPath}) not found " +
-                    "in assets; using HEAVY instead."
-            )
-            PoseModel.HEAVY
+        runtimeDescription = "${requestedModel.assetPath} · unavailable"
+        val assetPath = try {
+            requestedModel.requireAsset(::assetExists)
+        } catch (error: IllegalStateException) {
+            listener.onError(error.message ?: "Selected pose model unavailable")
+            return
         }
 
         val useGpu = settings.useGpu
         try {
             poseLandmarker = createLandmarker(
-                model.assetPath,
+                assetPath,
                 if (useGpu) Delegate.GPU else Delegate.CPU
             )
         } catch (gpuOrInitError: Exception) {
             if (useGpu) {
                 listener.onError(
-                    "GPU delegate unavailable; falling back to CPU. " +
+                    "GPU initialization failed for $assetPath; retrying the same model on CPU. " +
                         "(${gpuOrInitError.message})"
                 )
                 try {
-                    poseLandmarker = createLandmarker(model.assetPath, Delegate.CPU)
+                    poseLandmarker = createLandmarker(assetPath, Delegate.CPU)
                 } catch (cpuError: Exception) {
-                    listener.onError("Failed to initialize pose model: ${cpuError.message}")
+                    listener.onError("Failed to initialize $assetPath on CPU: ${cpuError.message}. No other model was substituted.")
                 }
             } else {
-                listener.onError("Failed to initialize pose model: ${gpuOrInitError.message}")
+                listener.onError("Failed to initialize $assetPath on CPU: ${gpuOrInitError.message}. No other model was substituted.")
             }
         }
     }
@@ -79,6 +76,7 @@ class PoseLandmarkerHelper(
             .build()
         return PoseLandmarker.createFromOptions(context, options).also {
             runtimeDescription = "$assetPath · $delegate"
+            Log.i("PoseLandmarkerHelper", "Loaded $runtimeDescription")
         }
     }
 

@@ -3,15 +3,20 @@ package com.example.fitvisor__demo
 import android.content.Context
 
 /**
- * Pose model variants, ordered fastest -> most accurate. Only [HEAVY] ships in
- * assets by default; selecting [LITE] or [FULL] requires the matching `.task`
- * file to be added to `app/src/main/assets`. [PoseLandmarkerHelper] falls back
- * to [HEAVY] at runtime if the chosen file is missing.
+ * Bundled pose model variants, ordered fastest -> most accurate.
+ * A missing selected asset is an error; models are never substituted at runtime.
  */
 enum class PoseModel(val assetPath: String) {
     LITE("pose_landmarker_lite.task"),
     FULL("pose_landmarker_full.task"),
     HEAVY("pose_landmarker_heavy.task");
+
+    internal fun requireAsset(assetExists: (String) -> Boolean): String {
+        check(assetExists(assetPath)) {
+            "$name model asset ($assetPath) is missing or unreadable. Pose detection unavailable; no other model was substituted."
+        }
+        return assetPath
+    }
 
     companion object {
         /** Parses a stored enum name, defaulting to [HEAVY] for unknown/null. */

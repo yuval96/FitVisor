@@ -16,7 +16,7 @@
     <string name="settings_model_lite">Lite — fastest, least accurate</string>
     <string name="settings_model_full">Full — balanced speed and accuracy</string>
     <string name="settings_model_heavy">Heavy — most accurate, highest latency</string>
-    <string name="settings_note">Changes take effect on your next workout. Lite and Full need their matching .task file in the app\'s assets — only Heavy is bundled by default, so choosing a missing model falls back to Heavy.</string>
+    <string name="settings_note">Lite, Full and Heavy are bundled. Changes take effect on your next workout. The selected model is used on GPU or CPU; an unavailable model is reported as an error and is never replaced by another model.</string>
 
     <string name="exercise_squat">Squat</string>
     <string name="exercise_squat_subtitle">Track squat depth and posture</string>
