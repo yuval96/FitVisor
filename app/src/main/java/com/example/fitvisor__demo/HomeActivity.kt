@@ -1,20 +1,27 @@
 package com.example.fitvisor__demo
 
 import android.Manifest
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
+import android.widget.ImageButton
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.example.fitvisor__demo.databinding.ActivityHomeBinding
+import kotlinx.coroutines.launch
 
 class HomeActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHomeBinding
+    private lateinit var repository: WorkoutHistoryRepository
 
     /** Exercise the user tapped, held while the camera permission is requested. */
     private var pendingExercise: ExerciseType = ExerciseType.SQUAT
@@ -32,6 +39,7 @@ class HomeActivity : AppCompatActivity() {
         pendingWorkoutId = savedInstanceState?.getString("pendingWorkoutId")
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        repository = WorkoutHistoryRepository.getInstance(applicationContext)
 
         // Branded system bars + inset handling (edge-to-edge on Android 15+).
         BrandingInsets.applyNavySystemBars(this)
@@ -45,7 +53,6 @@ class HomeActivity : AppCompatActivity() {
 
         binding.startWorkoutButton.setOnClickListener {
             if (sessions.currentWorkout == null) {
-                SessionResultsHolder.clear()
                 sessions.startWorkout()
                 renderWorkout()
             }
@@ -56,10 +63,13 @@ class HomeActivity : AppCompatActivity() {
         binding.finishWorkoutButton.setOnClickListener {
             val id = sessions.currentWorkout?.id ?: return@setOnClickListener
             val completed = sessions.finishWorkout(id) ?: return@setOnClickListener
-            SessionResultsHolder.set(completed)
             renderWorkout()
-            startActivity(Intent(this, SummaryActivity::class.java)
-                .putExtra(SummaryActivity.EXTRA_WORKOUT_ID, completed.id))
+            lifecycleScope.launch {
+                repository.saveCompletedWorkout(completed)
+                loadHistory()
+                startActivity(Intent(this@HomeActivity, SummaryActivity::class.java)
+                    .putExtra(SummaryActivity.EXTRA_WORKOUT_ID, completed.id))
+            }
         }
 
         binding.cardSquat.setOnClickListener { onExerciseSelected(ExerciseType.SQUAT) }
@@ -101,6 +111,51 @@ class HomeActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         renderWorkout()
+        loadHistory()
+    }
+
+    private fun loadHistory() {
+        lifecycleScope.launch {
+            renderHistory(repository.getAllWorkouts())
+        }
+    }
+
+    private fun renderHistory(workouts: List<WorkoutSession>) {
+        val container = binding.historyContainer
+        container.removeAllViews()
+        binding.historyEmptyText.visibility = if (workouts.isEmpty()) View.VISIBLE else View.GONE
+        val inflater = LayoutInflater.from(this)
+        for (workout in workouts) {
+            val item = inflater.inflate(R.layout.view_workout_history_item, container, false)
+            item.findViewById<TextView>(R.id.historyDateText).text =
+                WorkoutTimeFormat.date(workout.startTimeMillis)
+            item.findViewById<TextView>(R.id.historyExercisesText).text =
+                workout.exercises.joinToString(", ") { it.exerciseType.displayName }
+            item.findViewById<TextView>(R.id.historyTotalsText).text =
+                getString(R.string.history_item_totals, workout.totalReps, workout.correctReps)
+            item.setOnClickListener {
+                startActivity(Intent(this, SummaryActivity::class.java)
+                    .putExtra(SummaryActivity.EXTRA_WORKOUT_ID, workout.id))
+            }
+            item.findViewById<ImageButton>(R.id.historyDeleteButton).setOnClickListener {
+                confirmDeleteWorkout(workout.id)
+            }
+            container.addView(item)
+        }
+    }
+
+    private fun confirmDeleteWorkout(workoutId: String) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.delete_workout_title)
+            .setMessage(R.string.delete_workout_message)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.delete) { _, _ ->
+                lifecycleScope.launch {
+                    repository.deleteWorkout(workoutId)
+                    loadHistory()
+                }
+            }
+            .show()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

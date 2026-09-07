@@ -18,11 +18,14 @@ is the sum of exercise durations, excluding pauses and time selecting exercises.
 Errors and aggregate metrics are retained regardless of debug visibility.
 Optional frame traces retain their existing compile-time switch and cap.
 
-`SessionResultsHolder` retains only the last completed workout, matched by ID.
-The summary derives counts and details from that single snapshot. Missing state
-(for example after process death) returns to Home with a message, rather than
-showing empty or mismatched results. There is no database, history, or process
-death recovery in this phase.
+Completed workouts are persisted to a Room database (`WorkoutHistoryRepository`)
+keyed by workout ID, including every exercise, rep, error, and per-rep metric.
+The summary screen always loads by ID from that store, whether opened right
+after finishing a workout or later from Home's Workout History list — so it
+survives process death and shows the same result either way. A missing ID
+(for example a deleted workout) returns to Home with a message rather than
+showing empty or mismatched results. Deleting a workout from History removes
+it and all of its child rows transactionally.
 
 Host tests cover transitions, repeated types, late/duplicate events, pause timing,
 rep data retention, empty sessions, and completed-summary ID matching. Device

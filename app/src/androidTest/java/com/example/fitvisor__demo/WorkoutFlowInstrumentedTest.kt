@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
@@ -15,12 +16,23 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class WorkoutFlowInstrumentedTest {
     private val manager get() = ActiveWorkoutStore.manager
+    private val repository by lazy {
+        WorkoutHistoryRepository.getInstance(InstrumentationRegistry.getInstrumentation().targetContext)
+    }
 
     @After fun clearTestWorkout() {
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
             manager.currentExerciseId?.let { manager.finishExercise(it) }
             manager.currentWorkout?.let { manager.finishWorkout(it.id) }
-            SessionResultsHolder.clear()
+        }
+    }
+
+    /** Summary loading is asynchronous now (Room), so poll instead of asserting immediately. */
+    private fun waitUntil(timeoutMs: Long = 5_000, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (!condition()) {
+            if (System.currentTimeMillis() > deadline) fail("Condition not met within ${timeoutMs}ms")
+            Thread.sleep(50)
         }
     }
 
@@ -46,6 +58,7 @@ class WorkoutFlowInstrumentedTest {
     @Test fun summaryKeepsRepeatedExerciseSectionsAndErrorsAfterRecreation() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         var id = ""
+        var completed: WorkoutSession? = null
         instrumentation.runOnMainSync {
             val workout = manager.startWorkout()
             id = workout.id
@@ -57,12 +70,23 @@ class WorkoutFlowInstrumentedTest {
                     RepDebugMetrics(mapOf("minKneeAngle" to 120.0)))
                 manager.finishExercise(exercise.id)
             }
-            SessionResultsHolder.set(manager.finishWorkout(id)!!)
+            completed = manager.finishWorkout(id)!!
         }
+        // Summary now always loads by ID from the workout history database, the
+        // same path as after finishing a workout from HomeActivity — so seed
+        // the DB directly rather than the old in-memory handoff.
+        runBlocking { repository.saveCompletedWorkout(completed!!) }
         val intent = Intent(instrumentation.targetContext, SummaryActivity::class.java)
             .putExtra(SummaryActivity.EXTRA_WORKOUT_ID, id)
         ActivityScenario.launch<SummaryActivity>(intent).use { scenario ->
             fun checkSummary() {
+                waitUntil {
+                    var populated = false
+                    scenario.onActivity { summary ->
+                        populated = summary.findViewById<LinearLayout>(R.id.repDetailsContainer).childCount > 0
+                    }
+                    populated
+                }
                 scenario.onActivity { summary ->
                     assertNull(manager.currentWorkout)
                     val sections = summary.findViewById<LinearLayout>(R.id.repDetailsContainer)
@@ -82,5 +106,6 @@ class WorkoutFlowInstrumentedTest {
             scenario.recreate()
             checkSummary()
         }
+        runBlocking { repository.deleteWorkout(id) }
     }
 }

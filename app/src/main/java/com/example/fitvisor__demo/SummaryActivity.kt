@@ -10,53 +10,63 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.example.fitvisor__demo.databinding.ActivitySummaryBinding
+import kotlinx.coroutines.launch
 import java.util.Locale
-import java.text.DateFormat
-import java.util.Date
 
 /**
- * Completed workout summary. Counts and details come from the same snapshot,
- * with an ordered section for every exercise session (including repeated types).
+ * Completed workout summary, loaded by ID from the workout history database.
+ * Counts and details come from the same persisted record, with an ordered
+ * section for every exercise session (including repeated types) — the same
+ * summary whether opened right after finishing a workout or later from History.
  */
 class SummaryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySummaryBinding
+    private lateinit var repository: WorkoutHistoryRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySummaryBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        repository = WorkoutHistoryRepository.getInstance(applicationContext)
 
         BrandingInsets.applyNavySystemBars(this)
         BrandingInsets.padForSystemBars(binding.summaryRoot)
 
-        val workout = SessionResultsHolder.get(intent.getStringExtra(EXTRA_WORKOUT_ID))
-        if (workout == null) {
-            Toast.makeText(this, R.string.workout_unavailable, Toast.LENGTH_LONG).show()
-            goHome()
-            return
+        binding.backButton.setOnClickListener { goHome() }
+        binding.backHomeButton.setOnClickListener { goHome() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = goHome()
+        })
+
+        val workoutId = intent.getStringExtra(EXTRA_WORKOUT_ID)
+        lifecycleScope.launch {
+            val workout = workoutId?.let { repository.getWorkout(it) }
+            if (workout == null) {
+                Toast.makeText(this@SummaryActivity, R.string.workout_unavailable, Toast.LENGTH_LONG).show()
+                goHome()
+                return@launch
+            }
+            bind(workout)
         }
+    }
+
+    private fun bind(workout: WorkoutSession) {
         val total = workout.totalReps
         val correct = workout.correctReps
         val incorrect = workout.incorrectReps
         val duration = workout.durationSeconds
 
         binding.exerciseNameText.text = getString(R.string.workout_exercise_count, workout.exercises.size)
-        binding.workoutDateText.text = formatTimeRange(workout.startTimeMillis, workout.endTimeMillis!!)
+        binding.workoutDateText.text = WorkoutTimeFormat.timeRange(this, workout.startTimeMillis, workout.endTimeMillis!!)
 
         bindStats(total, correct, incorrect, duration)
         bindFormScore(total, correct)
         bindFeedback(total, correct, incorrect)
         bindExercises(workout.exercises)
         RepTrackingPanel.bind(binding.repTrackingPanel.root)
-
-        // This workout is already finished; no summary action can resume it.
-        binding.backButton.setOnClickListener { goHome() }
-        binding.backHomeButton.setOnClickListener { goHome() }
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = goHome()
-        })
     }
 
     private fun bindExercises(exercises: List<ExerciseSession>) {
@@ -73,25 +83,20 @@ class SummaryActivity : AppCompatActivity() {
             section.findViewById<TextView>(R.id.exerciseSessionTitle).text =
                 getString(R.string.exercise_summary_title, index + 1, exercise.exerciseType.displayName)
             section.findViewById<TextView>(R.id.exerciseSessionTimes).text =
-                formatTimeRange(exercise.startTimeMillis, exercise.endTimeMillis!!)
+                WorkoutTimeFormat.timeRange(this, exercise.startTimeMillis, exercise.endTimeMillis!!)
             section.findViewById<TextView>(R.id.exerciseSessionTotals).text =
                 getString(R.string.exercise_summary_totals, exercise.reps.size,
-                    exercise.correctReps, exercise.incorrectReps, formatDuration(exercise.durationSeconds))
+                    exercise.correctReps, exercise.incorrectReps, WorkoutTimeFormat.duration(exercise.durationSeconds))
             bindRepDetails(exercise.reps, section.findViewById(R.id.exerciseSessionReps))
             container.addView(section)
         }
-    }
-
-    private fun formatTimeRange(start: Long, end: Long): String {
-        val formatter = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
-        return getString(R.string.workout_time_range, formatter.format(Date(start)), formatter.format(Date(end)))
     }
 
     private fun bindStats(total: Int, correct: Int, incorrect: Int, duration: Long) {
         binding.statTotal.setValue(total.toString())
         binding.statCorrect.setValue(correct.toString())
         binding.statIncorrect.setValue(incorrect.toString())
-        binding.statDuration.setValue(formatDuration(duration))
+        binding.statDuration.setValue(WorkoutTimeFormat.duration(duration))
     }
 
     private fun bindFormScore(total: Int, correct: Int) {
@@ -237,9 +242,6 @@ class SummaryActivity : AppCompatActivity() {
         startActivity(intent)
         finish()
     }
-
-    private fun formatDuration(seconds: Long): String =
-        if (seconds >= 60) "${seconds / 60}m ${seconds % 60}s" else "${seconds}s"
 
     private fun color(resId: Int) = ContextCompat.getColor(this, resId)
 

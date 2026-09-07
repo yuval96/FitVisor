@@ -12,4 +12,14 @@
     <string name="exercise_summary_totals">Reps: %1$d · Correct: %2$d · Incorrect: %3$d\nActive time: %4$s</string>
     <string name="summary_active_time">Active Time</string>
     <string name="summary_no_exercises">No exercises were performed.</string>
+
+    <!-- Workout history -->
+    <string name="workout_history_title">Workout History</string>
+    <string name="workout_history_empty">No completed workouts yet. Finish a workout to see it here.</string>
+    <string name="history_item_totals">%1$d reps · %2$d correct</string>
+    <string name="cd_delete_workout">Delete workout</string>
+    <string name="delete_workout_title">Delete this workout?</string>
+    <string name="delete_workout_message">This removes the workout and all its recorded reps. This can\'t be undone.</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
 </resources>

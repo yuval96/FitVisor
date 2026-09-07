@@ -165,19 +165,4 @@ class WorkoutSessionManagerTest {
         assertNull(newProcessOwner.currentExercise)
         assertNull(newProcessOwner.finishWorkout(workout.id))
     }
-
-    @Test fun summaryHandoffAcceptsOnlyCompletedMatchingWorkout() {
-        SessionResultsHolder.clear()
-        try {
-            val workout = manager.startWorkout()
-            assertThrows(IllegalStateException::class.java) { SessionResultsHolder.set(workout) }
-            val completed = manager.finishWorkout(workout.id)!!
-            SessionResultsHolder.set(completed)
-            assertEquals(completed, SessionResultsHolder.get(workout.id))
-            assertNull(SessionResultsHolder.get("stale-id"))
-            assertNull(SessionResultsHolder.get(null))
-        } finally {
-            SessionResultsHolder.clear()
-        }
-    }
 }
