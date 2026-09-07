@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_screen_gradient">
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_gravity="bottom"
+        android:scaleType="fitXY"
+        android:src="@drawable/decor_bottom_curves"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:id="@+id/settingsRoot"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- Top app bar -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:paddingHorizontal="8dp">
+
+            <ImageButton
+                android:id="@+id/backButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/cd_back"
+                android:src="@drawable/ic_arrow_back"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/settings_title"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <ImageView
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginEnd="4dp"
+                android:contentDescription="@string/cd_fitvisor_symbol"
+                android:src="@drawable/fitvisor_symbol_white"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:paddingHorizontal="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- Performance section -->
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/debugSwitch" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:minHeight="56dp" android:layout_marginTop="16dp"
+                    android:text="@string/debug_tools" android:textSize="18sp" android:textColor="@color/text_primary" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/debug_note" android:textColor="@color/text_secondary" />
+                <LinearLayout android:id="@+id/debugControls" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="vertical" android:visibility="gone">
+                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/latencySwitch"
+                        android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp"
+                        android:text="@string/track_latency" android:textColor="@color/text_primary" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="@string/latency_note" android:textColor="@color/text_secondary" android:textSize="13sp" />
+                    <TextView android:id="@+id/latencyReport" android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:paddingVertical="12dp" android:textColor="@color/text_primary" android:textIsSelectable="true" />
+                    <Button android:id="@+id/resetLatency" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="@string/reset_latency" />
+                    <include android:id="@+id/repTrackingPanel" layout="@layout/view_rep_tracking" />
+                </LinearLayout>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/settings_performance"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_feedback_card"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/settings_gpu_title"
+                            android:textColor="@color/text_primary"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="@string/settings_gpu_subtitle"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/gpuSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:thumbTint="@color/brand_cyan"
+                        android:trackTint="@color/text_disabled" />
+                </LinearLayout>
+
+                <!-- Pose model section -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="28dp"
+                    android:text="@string/settings_model_title"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <RadioGroup
+                    android:id="@+id/modelGroup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_feedback_card"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <RadioButton
+                        android:id="@+id/modelLite"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:buttonTint="@color/brand_cyan"
+                        android:padding="12dp"
+                        android:text="@string/settings_model_lite"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp" />
+
+                    <RadioButton
+                        android:id="@+id/modelFull"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:buttonTint="@color/brand_cyan"
+                        android:padding="12dp"
+                        android:text="@string/settings_model_full"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp" />
+
+                    <RadioButton
+                        android:id="@+id/modelHeavy"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:buttonTint="@color/brand_cyan"
+                        android:padding="12dp"
+                        android:text="@string/settings_model_heavy"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp" />
+                </RadioGroup>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="24dp"
+                    android:text="@string/settings_note"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+</FrameLayout>

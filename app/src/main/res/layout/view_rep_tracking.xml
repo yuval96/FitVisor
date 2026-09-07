@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="16dp" android:layout_marginVertical="12dp"
+    android:background="@drawable/bg_feedback_card">
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/testRepsSwitch" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:minHeight="48dp" android:text="@string/track_test_reps" android:textColor="@color/text_primary" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="@string/test_reps_note" android:textColor="@color/text_secondary" android:textSize="13sp" />
+    <TextView android:id="@+id/testRepsReport" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="12dp" android:textIsSelectable="true" android:textColor="@color/text_primary" android:textSize="15sp" />
+    <Button android:id="@+id/resetTestReps" android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="@string/reset_test_reps" />
+</LinearLayout>

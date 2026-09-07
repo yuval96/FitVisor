@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Exercise card: dark surface, thin turquoise border, rounded 20dp, with a
+     turquoise ripple for pressed-state feedback. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/brand_turquoise_ripple">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <solid android:color="#FFFFFFFF" />
+            <corners android:radius="20dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/bg_surface" />
+            <corners android:radius="20dp" />
+            <stroke
+                android:width="1.5dp"
+                android:color="@color/brand_turquoise" />
+        </shape>
+    </item>
+</ripple>

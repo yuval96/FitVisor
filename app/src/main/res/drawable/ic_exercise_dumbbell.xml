@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generic monochrome dumbbell UI icon (tinted per card; not a brand asset). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7,11h10v2h-10z M5,9h2v6h-2z M17,9h2v6h-2z M2.5,7.5h2.5v9h-2.5z M19,7.5h2.5v9h-2.5z" />
+</vector>

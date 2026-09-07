@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "FitVisor--DEMO"
+rootProject.name = "FitVisor"
 include(":app")
  

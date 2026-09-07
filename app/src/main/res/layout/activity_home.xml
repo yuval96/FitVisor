@@ -1,45 +1,136 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/homeRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#121212">
+    android:background="@drawable/bg_screen_gradient">
 
-    <TextView
-        android:id="@+id/logoText"
-        android:layout_width="wrap_content"
+    <!-- Decorative curved brand lines near the bottom (behind content). -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_gravity="bottom"
+        android:scaleType="fitXY"
+        android:src="@drawable/decor_bottom_curves"
+        android:importantForAccessibility="no" />
+
+    <ScrollView
+        android:id="@+id/homeScroll"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="32dp">
+
+            <!-- Logo with a subtle glow behind it. -->
+            <FrameLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content">
+
+                <ImageView
+                    android:layout_width="300dp"
+                    android:layout_height="140dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/bg_logo_glow"
+                    android:importantForAccessibility="no" />
+
+                <ImageView
+                    android:id="@+id/logoImage"
+                    android:layout_width="240dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:adjustViewBounds="true"
+                    android:contentDescription="@string/logo_content_description"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/fitvisor_logo_horizontal_white" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/subtitleText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="@string/home_subtitle"
+                android:textColor="@color/text_secondary"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/chooseLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:gravity="center"
+                android:text="@string/home_choose_exercise"
+                android:textColor="@color/text_primary"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <com.example.fitvisor__demo.ExerciseCardView
+                android:id="@+id/cardSquat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                app:cardIcon="@drawable/fitvisor_icon_squat_white"
+                app:cardSubtitle="@string/exercise_squat_subtitle"
+                app:cardTitle="@string/exercise_squat" />
+
+            <com.example.fitvisor__demo.ExerciseCardView
+                android:id="@+id/cardPushUp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                app:cardIcon="@drawable/fitvisor_icon_pushup_white"
+                app:cardSubtitle="@string/exercise_pushup_subtitle"
+                app:cardTitle="@string/exercise_pushup" />
+
+            <com.example.fitvisor__demo.ExerciseCardView
+                android:id="@+id/cardShoulderPress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                app:cardIcon="@drawable/fitvisor_icon_shoulder_press_white"
+                app:cardSubtitle="@string/exercise_shoulder_press_subtitle"
+                app:cardTitle="@string/exercise_shoulder_press" />
+
+            <com.example.fitvisor__demo.ExerciseCardView
+                android:id="@+id/cardBicepsCurl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="15dp"
+                app:cardIcon="@drawable/fitvisor_icon_biceps_curl_white"
+                app:cardSubtitle="@string/exercise_biceps_curl_subtitle"
+                app:cardTitle="@string/exercise_biceps_curl"
+                tools:ignore="ContentDescription" />
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Settings entry point (drawn above the scroll, kept clear of the status
+         bar by inset padding applied in HomeActivity). -->
+    <FrameLayout
+        android:id="@+id/settingsBar"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="FITVISOR"
-        android:textColor="#BB86FC"
-        android:textSize="48sp"
-        android:textStyle="bold"
-        app:layout_constraintBottom_toTopOf="@+id/startButton"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_chainStyle="packed" />
+        android:layout_gravity="top">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="AI Fitness Assistant"
-        android:textColor="#888888"
-        android:textSize="18sp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/logoText" />
-
-    <Button
-        android:id="@+id/startButton"
-        android:layout_width="250dp"
-        android:layout_height="60dp"
-        android:layout_marginTop="100dp"
-        android:backgroundTint="#BB86FC"
-        android:text="Start Squat Session"
-        android:textColor="#000000"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/logoText" />
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <ImageButton
+            android:id="@+id/settingsButton"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="end"
+            android:layout_margin="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/cd_open_settings"
+            android:padding="10dp"
+            android:src="@drawable/ic_settings" />
+    </FrameLayout>
+</FrameLayout>

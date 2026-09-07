@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Reusable exercise selection card. -->
+    <declare-styleable name="ExerciseCardView">
+        <attr name="cardTitle" format="string" />
+        <attr name="cardSubtitle" format="string" />
+        <attr name="cardIcon" format="reference" />
+        <attr name="cardIconTint" format="color" />
+    </declare-styleable>
+
+    <!-- Reusable compact statistic card used on the summary screen. -->
+    <declare-styleable name="StatCardView">
+        <attr name="statLabel" format="string" />
+        <attr name="statValue" format="string" />
+        <attr name="statValueColor" format="color" />
+    </declare-styleable>
+
+    <!-- Circular form-score indicator. -->
+    <declare-styleable name="CircularProgressView">
+        <attr name="cpvProgress" format="float" />
+        <attr name="cpvStrokeWidth" format="dimension" />
+        <attr name="cpvProgressColor" format="color" />
+        <attr name="cpvTrackColor" format="color" />
+    </declare-styleable>
+
+</resources>

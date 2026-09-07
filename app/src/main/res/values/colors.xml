@@ -7,4 +7,30 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- FitVisor brand palette (from brand assets) -->
+    <color name="fitvisor_navy">#061728</color>
+    <color name="fitvisor_surface">#0B2236</color>
+    <color name="fitvisor_green">#40E38F</color>
+    <color name="fitvisor_teal">#23C9C2</color>
+    <color name="fitvisor_blue">#1597E5</color>
+
+    <!-- FitVisor redesign design system -->
+    <!-- Backgrounds -->
+    <color name="bg_primary">#061728</color>
+    <color name="bg_surface">#0B1F33</color>
+    <color name="bg_elevated">#10283D</color>
+    <!-- Brand -->
+    <color name="brand_cyan">#20BEEA</color>
+    <color name="brand_turquoise">#16C6B3</color>
+    <color name="brand_green">#4FE0A5</color>
+    <color name="brand_turquoise_ripple">#4D16C6B3</color>
+    <!-- Text -->
+    <color name="text_primary">#F5F8FA</color>
+    <color name="text_secondary">#91A4B5</color>
+    <color name="text_disabled">#627586</color>
+    <!-- Feedback -->
+    <color name="feedback_success">#4FE0A5</color>
+    <color name="feedback_warning">#F5C451</color>
+    <color name="feedback_error">#FF5B67</color>
 </resources>

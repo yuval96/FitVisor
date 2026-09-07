@@ -4,8 +4,16 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
 /**
  * Applies Exponential Moving Average (EMA) smoothing to landmarks to reduce jitter.
+ *
+ * [alpha] weights the current frame against the previous smoothed value:
+ *   alpha = 1.0   -> no smoothing (raw landmarks, no added latency)
+ *   alpha -> 1.0  -> less smoothing / less latency
+ *   alpha lower   -> stronger smoothing / more lag
+ *
+ * The smoother accepts an arbitrary alpha; the app-wide default lives in
+ * [AnalysisConfig.LANDMARK_SMOOTHING_ALPHA] so it can be tuned in one place.
  */
-class LandmarkSmoother(private val alpha: Float = 0.35f) {
+class LandmarkSmoother(private val alpha: Float = AnalysisConfig.LANDMARK_SMOOTHING_ALPHA) {
 
     private var previousLandmarks: List<NormalizedLandmark>? = null
 

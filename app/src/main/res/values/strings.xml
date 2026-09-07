@@ -1,3 +1,70 @@
 <resources>
-    <string name="app_name">FitVisor--DEMO</string>
+    <string name="app_name">FitVisor</string>
+    <string name="logo_content_description">FitVisor logo</string>
+
+    <!-- Home screen -->
+    <string name="home_subtitle">AI Fitness Assistant</string>
+    <string name="home_choose_exercise">Choose an exercise</string>
+    <string name="cd_open_settings">Open settings</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_performance">Performance</string>
+    <string name="settings_gpu_title">GPU acceleration</string>
+    <string name="settings_gpu_subtitle">Run pose detection on the GPU for lower latency. Falls back to CPU if the device doesn\'t support it.</string>
+    <string name="settings_model_title">Pose model</string>
+    <string name="settings_model_lite">Lite — fastest, least accurate</string>
+    <string name="settings_model_full">Full — balanced speed and accuracy</string>
+    <string name="settings_model_heavy">Heavy — most accurate, highest latency</string>
+    <string name="settings_note">Changes take effect on your next workout. Lite and Full need their matching .task file in the app\'s assets — only Heavy is bundled by default, so choosing a missing model falls back to Heavy.</string>
+
+    <string name="exercise_squat">Squat</string>
+    <string name="exercise_squat_subtitle">Track squat depth and posture</string>
+    <string name="exercise_pushup">Push-Up</string>
+    <string name="exercise_pushup_subtitle">Check body alignment and depth</string>
+    <string name="exercise_shoulder_press">Shoulder Press</string>
+    <string name="exercise_shoulder_press_subtitle">Monitor arm and torso position</string>
+    <string name="exercise_biceps_curl">Biceps Curl</string>
+    <string name="exercise_biceps_curl_subtitle">Track elbow movement and stability</string>
+
+    <string name="cd_exercise_icon">Exercise icon</string>
+    <string name="cd_open_exercise">Open %1$s workout</string>
+    <string name="cd_chevron">Open</string>
+
+    <!-- Live workout -->
+    <string name="workout_rep_count">Reps: %1$d</string>
+    <string name="workout_rep_count_zero">Reps: 0</string>
+    <string name="cd_rep_count">%1$d repetitions completed</string>
+    <string name="cd_rep_count_zero">No repetitions completed</string>
+
+    <!-- Summary screen -->
+    <string name="summary_title">Workout Summary</string>
+    <string name="summary_form_score">Form Score</string>
+    <string name="summary_feedback">Feedback</string>
+    <string name="summary_back_home">Back to Home</string>
+    <string name="summary_total_reps">Total Reps</string>
+    <string name="summary_correct_reps">Correct</string>
+    <string name="summary_incorrect_reps">Incorrect</string>
+    <string name="summary_duration">Duration</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_fitvisor_symbol">FitVisor symbol</string>
+    <string name="cd_feedback_icon">Feedback status</string>
+
+    <string name="summary_score_percent">%1$d%%</string>
+    <string name="summary_score_na">--</string>
+
+    <!-- Rep details -->
+    <string name="summary_rep_details">Rep Details</string>
+    <string name="summary_rep_number">Rep %1$d</string>
+    <string name="summary_rep_correct">✓ Correct</string>
+    <string name="summary_rep_incorrect">✗ Incorrect</string>
+    <string name="summary_rep_none">No repetitions were recorded.</string>
+    <string name="summary_rep_debug_header">Debug:</string>
+
+    <!-- Feedback messages (selected from real rep counts) -->
+    <string name="feedback_none">No repetitions were recorded. Make sure your whole body stays visible and complete full reps.</string>
+    <string name="feedback_all_correct">Great form! Every rep was counted as correct.</string>
+    <string name="feedback_all_incorrect">Form needs work. None of your reps met the target — focus on full range of motion and posture.</string>
+    <string name="feedback_mostly_correct">Good effort. Some reps had form issues — keep your posture steady through the full range.</string>
+    <string name="feedback_mostly_incorrect">Several reps had form issues. Slow down and focus on depth and posture.</string>
 </resources>

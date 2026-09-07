@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Subtle turquoise glow placed behind the logo. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:type="radial"
+        android:gradientRadius="50%p"
+        android:startColor="#3316C6B3"
+        android:centerColor="#1A16C6B3"
+        android:endColor="#0016C6B3" />
+</shape>

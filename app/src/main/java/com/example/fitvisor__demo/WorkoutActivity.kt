@@ -1,11 +1,13 @@
 package com.example.fitvisor__demo
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Bundle
+import android.os.SystemClock
+import android.os.Build
 import android.util.Log
 import android.view.View
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -20,161 +22,342 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
-class WorkoutActivity : AppCompatActivity(), PoseLandmarkerHelper.LandmarkerListener {
+class WorkoutActivity :
+    AppCompatActivity(),
+    PoseLandmarkerHelper.LandmarkerListener {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var poseLandmarkerHelper: PoseLandmarkerHelper
     private lateinit var cameraExecutor: ExecutorService
+
     private var camera: Camera? = null
 
-    // Modular Components
-    private val ruleEngine = SquatRuleEngine()
+    private lateinit var exerciseType: ExerciseType
+    private lateinit var analyzer: ExerciseAnalyzer
+
     private val workoutManager = WorkoutManager()
-    
-    // 4) Landmark Smoothing (EMA)
-    private val landmarkSmoother = LandmarkSmoother(alpha = 0.35f)
+    private lateinit var settings: AppSettings
+    private lateinit var debugStore: DebugDataStore
+    private val latencyTracker = LatencyTracker()
+    @Volatile private var measureLatency = false
+    @Volatile private var workoutVisible = false
+    private val hideRepFeedback = Runnable { binding.repFeedback.visibility = View.GONE }
+    private val timerTick = object : Runnable {
+        override fun run() {
+            val seconds = workoutManager.getElapsedTimeSeconds()
+            binding.workoutTimer.text = getString(R.string.workout_time,
+                java.lang.String.format(java.util.Locale.US, "%02d:%02d", seconds / 60, seconds % 60))
+            binding.workoutTimer.postDelayed(this, 1000)
+        }
+    }
+
+    private val landmarkSmoother =
+        LandmarkSmoother(alpha = AnalysisConfig.LANDMARK_SMOOTHING_ALPHA)
+
+    companion object {
+        const val EXTRA_EXERCISE_TYPE = "EXERCISE_TYPE"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        BrandingInsets.padForSystemBars(binding.root)
+        settings = AppSettings(this)
+        debugStore = DebugDataStore(this)
 
-        poseLandmarkerHelper = PoseLandmarkerHelper(this, this)
-        cameraExecutor = Executors.newSingleThreadExecutor()
+        // Parse the selected exercise, defaulting to SQUAT if missing/invalid.
+        exerciseType = ExerciseType.fromNameOrDefault(
+            intent.getStringExtra(EXTRA_EXERCISE_TYPE)
+        )
+        analyzer = createAnalyzer(exerciseType)
+
+        binding.exerciseTitle.text = exerciseType.displayName
+        binding.exerciseInstruction.text = exerciseType.cameraInstruction
+
+        poseLandmarkerHelper =
+            PoseLandmarkerHelper(this, this)
+
+        cameraExecutor =
+            Executors.newSingleThreadExecutor()
 
         workoutManager.startSession()
+        updateRepCounter()
 
-        // 1) In-session Summary Button
         binding.summaryButton.setOnClickListener {
-            showSummaryDialog()
+            openSummary()
         }
 
         startCamera()
     }
 
+    private fun createAnalyzer(type: ExerciseType): ExerciseAnalyzer =
+        when (type) {
+            ExerciseType.SQUAT -> SquatAnalyzer()
+            ExerciseType.PUSH_UP -> PushUpAnalyzer()
+            ExerciseType.SHOULDER_PRESS -> ShoulderPressAnalyzer { settings.debugEnabled }
+            ExerciseType.BICEPS_CURL -> BicepsCurlAnalyzer()
+        }
+
     private fun startCamera() {
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        val cameraProviderFuture =
+            ProcessCameraProvider.getInstance(this)
+
         cameraProviderFuture.addListener({
-            val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
+            val cameraProvider =
+                cameraProviderFuture.get()
+
             val preview = Preview.Builder()
                 .build()
                 .also {
-                    it.setSurfaceProvider(binding.previewView.surfaceProvider)
+                    it.setSurfaceProvider(
+                        binding.previewView.surfaceProvider
+                    )
                 }
 
             val imageAnalyzer = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .setBackpressureStrategy(
+                    ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST
+                )
+                .setOutputImageFormat(
+                    ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888
+                )
                 .build()
                 .also { analyzer ->
+
                     analyzer.setAnalyzer(cameraExecutor) { imageProxy ->
-                        val frameTimeNanos = imageProxy.imageInfo.timestamp
-                        val frameTimeMicros = TimeUnit.NANOSECONDS.toMicros(frameTimeNanos)
-                        val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                        val bitmap = imageProxy.toBitmap()
-                        imageProxy.close()
-
-                        val matrix = Matrix().apply {
-                            postRotate(rotationDegrees.toFloat())
+                        if (!workoutVisible) {
+                            imageProxy.close()
+                            return@setAnalyzer
                         }
-                        val rotatedBitmap = Bitmap.createBitmap(
-                            bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true
-                        )
+                        val measurementStart = if (measureLatency) SystemClock.elapsedRealtimeNanos() else null
+                        try {
+                            val frameTimeNanos =
+                                imageProxy.imageInfo.timestamp
 
-                        val mpImage = BitmapImageBuilder(rotatedBitmap).build()
-                        poseLandmarkerHelper.detectLiveStream(frameTimeMicros, mpImage)
+                            val frameTimeMillis =
+                                TimeUnit.NANOSECONDS.toMillis(
+                                    frameTimeNanos
+                                )
+
+                            val rotationDegrees =
+                                imageProxy.imageInfo.rotationDegrees
+
+                            val bitmap =
+                                imageProxy.toBitmap()
+
+                            val matrix = Matrix().apply {
+                                postRotate(rotationDegrees.toFloat())
+                            }
+
+                            val rotatedBitmap =
+                                Bitmap.createBitmap(
+                                    bitmap,
+                                    0,
+                                    0,
+                                    bitmap.width,
+                                    bitmap.height,
+                                    matrix,
+                                    true
+                                )
+
+                            val mpImage =
+                                BitmapImageBuilder(rotatedBitmap)
+                                    .build()
+
+                            if (measurementStart != null && measureLatency) {
+                                latencyTracker.submit(frameTimeMillis, measurementStart, SystemClock.elapsedRealtimeNanos())
+                            }
+                            poseLandmarkerHelper.detectLiveStream(
+                                frameTimeMillis,
+                                mpImage
+                            )
+                        } catch (exception: Exception) {
+                            Log.e(
+                                "WorkoutActivity",
+                                "Failed to analyze camera frame",
+                                exception
+                            )
+                        } finally {
+                            imageProxy.close()
+                        }
                     }
                 }
 
-            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+            val cameraSelector =
+                CameraSelector.DEFAULT_FRONT_CAMERA
 
             try {
                 cameraProvider.unbindAll()
+
                 camera = cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageAnalyzer
+                    this,
+                    cameraSelector,
+                    preview,
+                    imageAnalyzer
                 )
-            } catch (exc: Exception) {
-                Log.e("WorkoutActivity", "Use case binding failed", exc)
+            } catch (exception: Exception) {
+                Log.e(
+                    "WorkoutActivity",
+                    "Use case binding failed",
+                    exception
+                )
             }
         }, ContextCompat.getMainExecutor(this))
     }
 
-    override fun onResults(result: PoseLandmarkerResult, imageHeight: Int, imageWidth: Int) {
+    override fun onResults(
+        result: PoseLandmarkerResult,
+        imageHeight: Int,
+        imageWidth: Int
+    ) {
+        val callbackTime = if (measureLatency) SystemClock.elapsedRealtimeNanos() else 0L
         runOnUiThread {
-            var kneeAngle = 0.0
-            var torsoAngle = 0.0
-            var warningMessage: String? = null
+            if (!workoutVisible) return@runOnUiThread
+            val rawLandmarks =
+                result.landmarks().firstOrNull()
 
-            // 4) Reduce overlay sensitivity and jitter
-            val rawLandmarks = result.landmarks().firstOrNull()
-            val smoothedLandmarks = rawLandmarks?.let { landmarkSmoother.smooth(it) }
-
-            if (smoothedLandmarks != null && smoothedLandmarks.isNotEmpty()) {
-                // 3) Use same filtered landmarks for logic and drawing
-                kneeAngle = KinematicCalculator.calculateAngle(
-                    smoothedLandmarks[PoseLandmarkIndices.L_HIP],
-                    smoothedLandmarks[PoseLandmarkIndices.L_KNEE],
-                    smoothedLandmarks[PoseLandmarkIndices.L_ANKLE]
-                )
-                torsoAngle = KinematicCalculator.calculateTorsoAngle(
-                    smoothedLandmarks[PoseLandmarkIndices.L_SH],
-                    smoothedLandmarks[PoseLandmarkIndices.R_SH],
-                    smoothedLandmarks[PoseLandmarkIndices.L_HIP],
-                    smoothedLandmarks[PoseLandmarkIndices.R_HIP]
-                )
-
-                val knee = smoothedLandmarks[PoseLandmarkIndices.L_KNEE]
-                val foot = smoothedLandmarks[PoseLandmarkIndices.L_FOOT_INDEX]
-                val kneeMisaligned = knee.x() < foot.x()
-
-                val analysis = ruleEngine.processFrame(kneeAngle, torsoAngle, kneeMisaligned)
-                warningMessage = analysis.warning
-
-                if (analysis.isRepCompleted) {
-                    workoutManager.addRep(analysis.isRepCorrect)
-                    // 2) Rep-completion feedback
-                    showRepFeedback()
+            val smoothedLandmarks =
+                rawLandmarks?.let {
+                    landmarkSmoother.smooth(it)
                 }
+
+            val output: ExerciseFrameOutput =
+                if (!smoothedLandmarks.isNullOrEmpty()) {
+                    analyzer.analyze(
+                        smoothedLandmarks,
+                        imageWidth,
+                        imageHeight
+                    )
+                } else {
+                    ExerciseFrameOutput(
+                        ExerciseAnalysisResult(
+                            isRepCompleted = false,
+                            isRepCorrect = false,
+                            warning = "No body detected",
+                            phaseName = "-"
+                        ),
+                        OverlayMetrics(emptyMap(), "No body detected", null)
+                    )
+                }
+
+            if (output.result.isRepCompleted) {
+                workoutManager.recordRep(
+                    exerciseType = exerciseType,
+                    isCorrect = output.result.isRepCorrect,
+                    errors = output.result.errors,
+                    debugMetrics = if (settings.debugEnabled) output.result.debugMetrics ?: RepDebugMetrics.EMPTY else RepDebugMetrics.EMPTY
+                )
+                debugStore.recordRep(exerciseType, output.result.isRepCorrect)
+                updateRepCounter()
+                showRepFeedback(output.result.isRepCorrect)
             }
 
-            // 3) Update Overlay with Correct Mapping (Signature match)
             binding.overlayView.setResults(
                 smoothedLandmarks,
                 imageHeight,
                 imageWidth,
-                kneeAngle,
-                torsoAngle,
-                warningMessage
+                output.metrics
             )
+            val warning = output.metrics.warning?.takeIf { it.isNotBlank() }
+            binding.correctionFeedback.text = warning
+            binding.correctionFeedback.visibility = if (warning == null) View.GONE else View.VISIBLE
+            if (measureLatency && callbackTime != 0L) {
+                latencyTracker.complete(result.timestampMs(), callbackTime, SystemClock.elapsedRealtimeNanos())
+            }
         }
     }
 
-    private fun showRepFeedback() {
-        binding.repFeedback.visibility = View.VISIBLE
-        binding.repFeedback.postDelayed({
-            binding.repFeedback.visibility = View.GONE
-        }, 800)
+    private fun showRepFeedback(
+        isCorrect: Boolean
+    ) {
+        binding.repFeedback.text =
+            if (isCorrect) {
+                "Correct rep"
+            } else {
+                "Incorrect rep"
+            }
+
+        binding.repFeedback.visibility =
+            View.VISIBLE
+
+        binding.repFeedback.removeCallbacks(hideRepFeedback)
+        binding.repFeedback.postDelayed(hideRepFeedback, 1500)
     }
 
-    private fun showSummaryDialog() {
+    private fun updateRepCounter() {
+        val count = workoutManager.getTotalReps()
+        binding.repCounter.text = getString(R.string.workout_rep_count, count)
+        binding.repCounter.contentDescription = getString(R.string.cd_rep_count, count)
+    }
+
+    /**
+     * Opens the branded workout summary screen with the current session stats.
+     * The workout pauses behind it, so pressing back resumes the session;
+     * the summary's "Back to Home" action ends it.
+     */
+    private fun openSummary() {
+        workoutVisible = false
+        workoutManager.pauseSession()
         val summary = workoutManager.getSummary()
-        AlertDialog.Builder(this)
-            .setTitle("Session Summary")
-            .setMessage("Total Reps: ${summary.totalReps}\n" +
-                        "Correct: ${summary.correctReps}\n" +
-                        "Incorrect: ${summary.incorrectReps}\n" +
-                        "Duration: ${summary.durationSeconds}s")
-            .setPositiveButton("Resume") { dialog, _ -> dialog.dismiss() }
-            .setNegativeButton("End Session") { _, _ -> finish() }
-            .show()
+
+        // Hand the (potentially large) per-rep records off in-process; the
+        // scalar totals still travel as extras so the numbers work regardless.
+        SessionResultsHolder.set(workoutManager.getRepRecords())
+
+        val intent = Intent(this, SummaryActivity::class.java).apply {
+            putExtra(SummaryActivity.EXTRA_EXERCISE_TYPE, exerciseType.name)
+            putExtra(SummaryActivity.EXTRA_TOTAL, summary.totalReps)
+            putExtra(SummaryActivity.EXTRA_CORRECT, summary.correctReps)
+            putExtra(SummaryActivity.EXTRA_INCORRECT, summary.incorrectReps)
+            putExtra(SummaryActivity.EXTRA_DURATION, summary.durationSeconds)
+        }
+        startActivity(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        workoutManager.resumeSession()
+        binding.overlayView.setDebugEnabled(settings.debugEnabled)
+        measureLatency = settings.latencyEnabled
+        workoutVisible = true
+        binding.workoutTimer.removeCallbacks(timerTick)
+        timerTick.run()
+    }
+
+    override fun onPause() {
+        workoutVisible = false
+        workoutManager.pauseSession()
+        binding.workoutTimer.removeCallbacks(timerTick)
+        binding.repFeedback.removeCallbacks(hideRepFeedback)
+        binding.repFeedback.visibility = View.GONE
+        if (measureLatency) {
+            debugStore.saveLatency("${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}\n" +
+                "${exerciseType.displayName} · ${poseLandmarkerHelper.runtimeDescription}\n" +
+                "Saved ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date())}\n\n" + latencyTracker.report())
+        }
+        measureLatency = false
+        latencyTracker.clearPending()
+        // Do not join half a movement before backgrounding to one after resuming.
+        analyzer.reset()
+        landmarkSmoother.reset()
+        super.onPause()
     }
 
     override fun onError(error: String) {
-        Log.e("WorkoutActivity", error)
+        Log.e(
+            "WorkoutActivity",
+            error
+        )
     }
 
     override fun onDestroy() {
         super.onDestroy()
+
+        landmarkSmoother.reset()
+        analyzer.reset()
+
         cameraExecutor.shutdown()
     }
 }

@@ -2,5 +2,9 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <!--
+        No <monochrome> layer: the FitVisor foreground is a multicolor asset and
+        the themed-icon monochrome layer is always tinted by the system, which
+        the brand guidelines forbid for multicolor assets.
+    -->
 </adaptive-icon>

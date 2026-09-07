@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Decorative curved brand lines + faint landmark dots for the bottom of the
+     screen. Low opacity so it never reduces text readability. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="360dp"
+    android:height="200dp"
+    android:viewportWidth="360"
+    android:viewportHeight="200">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#20BEEA"
+        android:strokeAlpha="0.28"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M-20,170 C 80,110 210,200 390,95" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#4FE0A5"
+        android:strokeAlpha="0.24"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M-20,198 C 110,150 230,210 390,135" />
+    <path
+        android:fillColor="#16C6B3"
+        android:fillAlpha="0.22"
+        android:pathData="M60,150 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path
+        android:fillColor="#20BEEA"
+        android:fillAlpha="0.22"
+        android:pathData="M150,120 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path
+        android:fillColor="#4FE0A5"
+        android:fillAlpha="0.22"
+        android:pathData="M250,150 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    <path
+        android:fillColor="#20BEEA"
+        android:fillAlpha="0.20"
+        android:pathData="M320,110 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+</vector>

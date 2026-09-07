@@ -1,0 +1,13 @@
+<resources>
+    <string name="debug_tools">Debug tools</string>
+    <string name="debug_note">Show skeleton, angles and diagnostic data. Turning this off also disables latency and test repetition tracking.</string>
+    <string name="track_latency">Track latency</string>
+    <string name="latency_note">Measures completed frames from image preparation to UI update, including model callback and UI queue time. Excludes camera capture delay and screen rendering. Saved when leaving the workout; no tracking while off.</string>
+    <string name="reset_latency">Reset latency measurements</string>
+    <string name="track_test_reps">Track test repetitions</string>
+    <string name="test_reps_note">Counts detected repetitions across workouts for project testing. These are app classifications, not manually verified accuracy. Turning tracking off keeps existing totals.</string>
+    <string name="reset_test_reps">Reset test repetitions</string>
+    <string name="reset_test_reps_confirmation">Reset accumulated test counts for all exercises? Current workout results will be kept.</string>
+    <string name="reset_data">Reset</string>
+    <string name="workout_time">Time %1$s</string>
+</resources>

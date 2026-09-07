@@ -13,4 +13,21 @@
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
         <!-- Customize your theme here. -->
     </style>
+
+    <!--
+        Android 12+ splash screen (androidx.core:core-splashscreen).
+        Shows the FitVisor symbol on the brand navy while the launcher activity
+        initializes, then hands off to the existing app theme. No artificial
+        delay is added; it is dismissed as soon as the first frame is ready.
+    -->
+    <style name="Theme.FitVisor.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/fitvisor_navy</item>
+        <!--
+            Padded variant of fitvisor_symbol_white (same art, centered on a
+            larger transparent canvas) so the symbol fits inside the Android 12
+            splash keyline and is never clipped.
+        -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/fitvisor_symbol_white_splash</item>
+        <item name="postSplashScreenTheme">@style/Theme.AppCompat.NoActionBar</item>
+    </style>
 </resources>

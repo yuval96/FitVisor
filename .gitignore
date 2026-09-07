@@ -13,3 +13,40 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Generated build outputs and local Gradle/Kotlin caches
+build/
+build-codex-*/
+.gradle-*/
+.kotlin/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.hprof
+
+# Local IDE state and tool permissions
+/.idea/shelf/
+/.idea/deploymentTargetDropDown.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.claude/settings.local.json
+
+# Temporary files, logs, and upload staging
+.tmp*/
+*.tmp
+*.temp
+*.log
+*.swp
+*.swo
+*~
+
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+keystore.properties
+key.properties
+*.jks
+*.keystore
+*.p12

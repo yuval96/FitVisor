@@ -36,14 +36,92 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Selected exercise name -->
+    <TextView
+        android:id="@+id/exerciseTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="20dp"
+        android:layout_marginEnd="8dp"
+        android:text="Squat"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:shadowColor="#000000"
+        android:shadowDx="2"
+        android:shadowDy="2"
+        android:shadowRadius="4"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/summaryButton"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Camera-position instruction -->
+    <TextView
+        android:id="@+id/exerciseInstruction"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="4dp"
+        android:text="Stand sideways with your full body visible"
+        android:textColor="#EEEEEE"
+        android:textSize="14sp"
+        android:shadowColor="#000000"
+        android:shadowDx="2"
+        android:shadowDy="2"
+        android:shadowRadius="4"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/summaryButton"
+        app:layout_constraintTop_toBottomOf="@id/exerciseTitle" />
+
+    <!-- Persistent count backed by the same completed-rep records as Summary. -->
+    <TextView
+        android:id="@+id/repCounter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:background="@drawable/bg_rep_counter"
+        android:contentDescription="@string/cd_rep_count_zero"
+        android:paddingHorizontal="18dp"
+        android:paddingVertical="10dp"
+        android:text="@string/workout_rep_count_zero"
+        android:textColor="@android:color/white"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:accessibilityLiveRegion="polite"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/exerciseInstruction" />
+
     <!-- 2) Rep-completion Feedback -->
+    <TextView android:id="@+id/workoutTimer"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:paddingHorizontal="12dp" android:paddingVertical="6dp"
+        android:background="@drawable/bg_rep_counter" android:textColor="@android:color/white"
+        android:textSize="18sp" android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="@id/repCounter"
+        app:layout_constraintTop_toBottomOf="@id/repCounter" />
+
+    <TextView android:id="@+id/correctionFeedback"
+        android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp" android:layout_marginBottom="24dp"
+        android:padding="16dp" android:background="@drawable/bg_live_feedback"
+        android:textColor="#FFFFFF" android:textSize="24sp" android:textStyle="bold"
+        android:gravity="center" android:visibility="gone" android:accessibilityLiveRegion="polite"
+        app:layout_constraintStart_toStartOf="parent" app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent" />
     <TextView
         android:id="@+id/repFeedback"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="+1 Rep"
         android:textColor="#FFEB3B"
-        android:textSize="48sp"
+        android:textSize="28sp"
+        android:background="@drawable/bg_live_feedback"
+        android:padding="16dp"
+        android:layout_marginHorizontal="24dp"
+        android:gravity="center"
         android:textStyle="bold"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
