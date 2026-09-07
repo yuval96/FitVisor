@@ -95,6 +95,12 @@ class PoseLandmarkerHelper(
         poseLandmarker?.detectAsync(image, timestampMillis)
     }
 
+    /** Release the native detector after the workout Activity stops submitting frames. */
+    fun close() {
+        poseLandmarker?.close()
+        poseLandmarker = null
+    }
+
     private fun onResults(result: PoseLandmarkerResult, input: com.google.mediapipe.framework.image.MPImage) {
         listener.onResults(result, input.height, input.width)
     }

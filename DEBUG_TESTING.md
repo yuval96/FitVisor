@@ -3,7 +3,7 @@
 ## Controls
 
 - Open Settings and turn on **Debug tools**. Defaults to off.
-- Debug tools show the live skeleton, angles, phase, preview bounds, summary angle data and shoulder-press Logcat diagnostics.
+- Debug tools show the live skeleton, angles, phase, preview bounds, summary metric data and shoulder-press Logcat diagnostics. Per-rep metrics are retained even with debug off; their summary display remains debug-only.
 - Enable **Track latency** and/or **Track test repetitions** separately. Turning Debug tools off disables both and hides their controls. Re-enabling debug leaves both trackers off.
 - Ordinary workout repetition counts, corrective feedback and the timer work with debug off.
 - Test repetitions accumulate locally across workouts, by exercise and app-classified correct/incorrect status. Turn tracking off or reset all test counts from Settings or the exercise Summary. Resetting test counts does not change ordinary workout results.
@@ -29,11 +29,11 @@ The report shows mean, nearest-rank P95 and maximum milliseconds for the latest 
 
 - Debug off: timer/count/corrective cards visible; skeleton/angles/debug controls absent.
 - Debug on: diagnostic overlay and both optional controls visible, initially off.
-- Enable both trackers, complete reps for each exercise, inspect Summary and Settings; totals increment once per detected rep.
-- Disable test tracking from Summary, resume and complete reps; ordinary workout count increases but test total stays fixed.
+- Enable both trackers, complete reps for each exercise, finish each exercise, then finish the workout and inspect Summary and Settings; totals increment once per detected rep.
+- Disable test tracking from Settings or the completed Summary, start another workout and complete reps; ordinary workout count increases but test total stays fixed.
 - Reset test counts; every exercise becomes zero and ordinary session results remain intact.
 - Disable Debug tools and re-enable it; both trackers remain off, saved totals remain available.
-- Open Summary or background the app for ten seconds; workout elapsed time does not include the pause. Resume and verify timing/counting continues.
+- Background the app for ten seconds; exercise elapsed time does not include the pause. Resume and verify timing/counting continues. Time in exercise selection is also excluded from the summary's Active Time.
 - Check corrective cards at normal training distance, with bright and dark camera backgrounds and long messages.
 - Verify actual device latency with CPU/GPU and available model variants. No device results should be claimed from desktop unit tests.
 

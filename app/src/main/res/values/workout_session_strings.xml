@@ -1,0 +1,15 @@
+<resources>
+    <string name="start_workout">Start Workout</string>
+    <string name="finish_workout">Finish Workout</string>
+    <string name="finish_exercise">Finish Exercise</string>
+    <string name="resume_exercise">Resume Exercise</string>
+    <string name="active_workout_status">Workout active · Exercises completed: %1$d · Reps: %2$d</string>
+    <string name="completed_exercise_line">%1$d. %2$s · Reps: %3$d</string>
+    <string name="workout_unavailable">This workout is no longer available. Start a new workout.</string>
+    <string name="workout_exercise_count">Exercises: %1$d</string>
+    <string name="workout_time_range">Started: %1$s\nFinished: %2$s</string>
+    <string name="exercise_summary_title">%1$d. %2$s</string>
+    <string name="exercise_summary_totals">Reps: %1$d · Correct: %2$d · Incorrect: %3$d\nActive time: %4$s</string>
+    <string name="summary_active_time">Active Time</string>
+    <string name="summary_no_exercises">No exercises were performed.</string>
+</resources>

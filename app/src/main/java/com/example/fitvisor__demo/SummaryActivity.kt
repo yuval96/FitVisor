@@ -5,19 +5,19 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.TextView
+import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.fitvisor__demo.databinding.ActivitySummaryBinding
 import java.util.Locale
+import java.text.DateFormat
+import java.util.Date
 
 /**
- * Workout summary screen. Shows the session results produced by the workout
- * logic (total / correct / incorrect reps, duration) using the branded design
- * system.
- *
- * The "Form Score" and the feedback message are *derived from the real rep
- * counts* passed in from [WorkoutActivity] (correct vs. total) — no accuracy
- * value is invented.
+ * Completed workout summary. Counts and details come from the same snapshot,
+ * with an ordered section for every exercise session (including repeated types).
  */
 class SummaryActivity : AppCompatActivity() {
 
@@ -31,28 +31,60 @@ class SummaryActivity : AppCompatActivity() {
         BrandingInsets.applyNavySystemBars(this)
         BrandingInsets.padForSystemBars(binding.summaryRoot)
 
-        val exerciseType = ExerciseType.fromNameOrDefault(
-            intent.getStringExtra(EXTRA_EXERCISE_TYPE)
-        )
-        val total = intent.getIntExtra(EXTRA_TOTAL, 0)
-        val correct = intent.getIntExtra(EXTRA_CORRECT, 0)
-        val incorrect = intent.getIntExtra(EXTRA_INCORRECT, 0)
-        val duration = intent.getLongExtra(EXTRA_DURATION, 0L)
+        val workout = SessionResultsHolder.get(intent.getStringExtra(EXTRA_WORKOUT_ID))
+        if (workout == null) {
+            Toast.makeText(this, R.string.workout_unavailable, Toast.LENGTH_LONG).show()
+            goHome()
+            return
+        }
+        val total = workout.totalReps
+        val correct = workout.correctReps
+        val incorrect = workout.incorrectReps
+        val duration = workout.durationSeconds
 
-        binding.exerciseNameText.text = exerciseType.displayName
+        binding.exerciseNameText.text = getString(R.string.workout_exercise_count, workout.exercises.size)
+        binding.workoutDateText.text = formatTimeRange(workout.startTimeMillis, workout.endTimeMillis!!)
 
         bindStats(total, correct, incorrect, duration)
         bindFormScore(total, correct)
         bindFeedback(total, correct, incorrect)
-        bindRepDetails(SessionResultsHolder.repRecords)
+        bindExercises(workout.exercises)
         RepTrackingPanel.bind(binding.repTrackingPanel.root)
 
-        // Back / up = return to the running workout (resume the session).
-        binding.backButton.setOnClickListener { finish() }
-
-        // Main action = end the session and return to Home, clearing the
-        // workout activity from the back stack.
+        // This workout is already finished; no summary action can resume it.
+        binding.backButton.setOnClickListener { goHome() }
         binding.backHomeButton.setOnClickListener { goHome() }
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = goHome()
+        })
+    }
+
+    private fun bindExercises(exercises: List<ExerciseSession>) {
+        val container = binding.repDetailsContainer
+        container.removeAllViews()
+        if (exercises.isEmpty()) {
+            container.addView(TextView(this).apply {
+                setText(R.string.summary_no_exercises)
+                setTextColor(color(R.color.text_secondary))
+            })
+        }
+        exercises.forEachIndexed { index, exercise ->
+            val section = layoutInflater.inflate(R.layout.view_exercise_summary, container, false)
+            section.findViewById<TextView>(R.id.exerciseSessionTitle).text =
+                getString(R.string.exercise_summary_title, index + 1, exercise.exerciseType.displayName)
+            section.findViewById<TextView>(R.id.exerciseSessionTimes).text =
+                formatTimeRange(exercise.startTimeMillis, exercise.endTimeMillis!!)
+            section.findViewById<TextView>(R.id.exerciseSessionTotals).text =
+                getString(R.string.exercise_summary_totals, exercise.reps.size,
+                    exercise.correctReps, exercise.incorrectReps, formatDuration(exercise.durationSeconds))
+            bindRepDetails(exercise.reps, section.findViewById(R.id.exerciseSessionReps))
+            container.addView(section)
+        }
+    }
+
+    private fun formatTimeRange(start: Long, end: Long): String {
+        val formatter = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+        return getString(R.string.workout_time_range, formatter.format(Date(start)), formatter.format(Date(end)))
     }
 
     private fun bindStats(total: Int, correct: Int, incorrect: Int, duration: Long) {
@@ -128,9 +160,7 @@ class SummaryActivity : AppCompatActivity() {
      * scrolling. Debug angle metrics are shown only when
      * [AppSettings.debugEnabled] is enabled.
      */
-    private fun bindRepDetails(records: List<RepRecord>) {
-        val container = binding.repDetailsContainer
-        container.removeAllViews()
+    private fun bindRepDetails(records: List<RepRecord>, container: LinearLayout) {
 
         if (records.isEmpty()) {
             val empty = TextView(this).apply {
@@ -186,7 +216,8 @@ class SummaryActivity : AppCompatActivity() {
             builder.append('\n')
                 .append(prettifyLabel(label))
                 .append(": ")
-                .append(formatAngle(value))
+                .append(if (label == "startDetected" || label == "topReached")
+                    String.format(Locale.US, "%.0f", value) else formatAngle(value))
         }
         return builder.toString()
     }
@@ -213,11 +244,7 @@ class SummaryActivity : AppCompatActivity() {
     private fun color(resId: Int) = ContextCompat.getColor(this, resId)
 
     companion object {
-        const val EXTRA_EXERCISE_TYPE = "SUMMARY_EXERCISE_TYPE"
-        const val EXTRA_TOTAL = "SUMMARY_TOTAL"
-        const val EXTRA_CORRECT = "SUMMARY_CORRECT"
-        const val EXTRA_INCORRECT = "SUMMARY_INCORRECT"
-        const val EXTRA_DURATION = "SUMMARY_DURATION"
+        const val EXTRA_WORKOUT_ID = "SUMMARY_WORKOUT_ID"
 
         private const val STRONG_SCORE = 80
         private const val MEDIUM_SCORE = 50

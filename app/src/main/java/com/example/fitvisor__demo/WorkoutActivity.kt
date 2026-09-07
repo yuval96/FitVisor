@@ -8,6 +8,8 @@ import android.os.SystemClock
 import android.os.Build
 import android.util.Log
 import android.view.View
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
@@ -35,7 +37,8 @@ class WorkoutActivity :
     private lateinit var exerciseType: ExerciseType
     private lateinit var analyzer: ExerciseAnalyzer
 
-    private val workoutManager = WorkoutManager()
+    private val sessions get() = ActiveWorkoutStore.manager
+    private var exerciseSessionId = ""
     private lateinit var settings: AppSettings
     private lateinit var debugStore: DebugDataStore
     private val latencyTracker = LatencyTracker()
@@ -44,7 +47,7 @@ class WorkoutActivity :
     private val hideRepFeedback = Runnable { binding.repFeedback.visibility = View.GONE }
     private val timerTick = object : Runnable {
         override fun run() {
-            val seconds = workoutManager.getElapsedTimeSeconds()
+            val seconds = sessions.currentExercise?.takeIf { it.id == exerciseSessionId }?.durationSeconds ?: 0L
             binding.workoutTimer.text = getString(R.string.workout_time,
                 java.lang.String.format(java.util.Locale.US, "%02d:%02d", seconds / 60, seconds % 60))
             binding.workoutTimer.postDelayed(this, 1000)
@@ -55,7 +58,7 @@ class WorkoutActivity :
         LandmarkSmoother(alpha = AnalysisConfig.LANDMARK_SMOOTHING_ALPHA)
 
     companion object {
-        const val EXTRA_EXERCISE_TYPE = "EXERCISE_TYPE"
+        const val EXTRA_EXERCISE_SESSION_ID = "EXERCISE_SESSION_ID"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,10 +70,14 @@ class WorkoutActivity :
         settings = AppSettings(this)
         debugStore = DebugDataStore(this)
 
-        // Parse the selected exercise, defaulting to SQUAT if missing/invalid.
-        exerciseType = ExerciseType.fromNameOrDefault(
-            intent.getStringExtra(EXTRA_EXERCISE_TYPE)
-        )
+        exerciseSessionId = intent.getStringExtra(EXTRA_EXERCISE_SESSION_ID) ?: ""
+        val session = sessions.currentExercise?.takeIf { it.id == exerciseSessionId }
+        if (session == null) {
+            Toast.makeText(this, R.string.workout_unavailable, Toast.LENGTH_LONG).show()
+            returnToSelection()
+            return
+        }
+        exerciseType = session.exerciseType
         analyzer = createAnalyzer(exerciseType)
 
         binding.exerciseTitle.text = exerciseType.displayName
@@ -82,12 +89,15 @@ class WorkoutActivity :
         cameraExecutor =
             Executors.newSingleThreadExecutor()
 
-        workoutManager.startSession()
         updateRepCounter()
 
         binding.summaryButton.setOnClickListener {
-            openSummary()
+            finishExercise()
         }
+        // Back also ends only this exercise, preserving its completed reps.
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() = finishExercise()
+        })
 
         startCamera()
     }
@@ -107,6 +117,7 @@ class WorkoutActivity :
         cameraProviderFuture.addListener({
             val cameraProvider =
                 cameraProviderFuture.get()
+            if (isFinishing || isDestroyed) return@addListener
 
             val preview = Preview.Builder()
                 .build()
@@ -214,7 +225,7 @@ class WorkoutActivity :
     ) {
         val callbackTime = if (measureLatency) SystemClock.elapsedRealtimeNanos() else 0L
         runOnUiThread {
-            if (!workoutVisible) return@runOnUiThread
+            if (!workoutVisible || sessions.currentExerciseId != exerciseSessionId) return@runOnUiThread
             val rawLandmarks =
                 result.landmarks().firstOrNull()
 
@@ -243,15 +254,17 @@ class WorkoutActivity :
                 }
 
             if (output.result.isRepCompleted) {
-                workoutManager.recordRep(
-                    exerciseType = exerciseType,
+                val recorded = sessions.recordRep(
+                    exerciseId = exerciseSessionId,
                     isCorrect = output.result.isRepCorrect,
                     errors = output.result.errors,
-                    debugMetrics = if (settings.debugEnabled) output.result.debugMetrics ?: RepDebugMetrics.EMPTY else RepDebugMetrics.EMPTY
+                    debugMetrics = output.result.debugMetrics ?: RepDebugMetrics.EMPTY
                 )
-                debugStore.recordRep(exerciseType, output.result.isRepCorrect)
-                updateRepCounter()
-                showRepFeedback(output.result.isRepCorrect)
+                if (recorded != null) {
+                    debugStore.recordRep(exerciseType, output.result.isRepCorrect)
+                    updateRepCounter()
+                    showRepFeedback(output.result.isRepCorrect)
+                }
             }
 
             binding.overlayView.setResults(
@@ -287,38 +300,31 @@ class WorkoutActivity :
     }
 
     private fun updateRepCounter() {
-        val count = workoutManager.getTotalReps()
+        val count = sessions.currentExercise?.takeIf { it.id == exerciseSessionId }?.reps?.size ?: 0
         binding.repCounter.text = getString(R.string.workout_rep_count, count)
         binding.repCounter.contentDescription = getString(R.string.cd_rep_count, count)
     }
 
-    /**
-     * Opens the branded workout summary screen with the current session stats.
-     * The workout pauses behind it, so pressing back resumes the session;
-     * the summary's "Back to Home" action ends it.
-     */
-    private fun openSummary() {
+    private fun finishExercise() {
         workoutVisible = false
-        workoutManager.pauseSession()
-        val summary = workoutManager.getSummary()
+        sessions.finishExercise(exerciseSessionId)
+        returnToSelection()
+    }
 
-        // Hand the (potentially large) per-rep records off in-process; the
-        // scalar totals still travel as extras so the numbers work regardless.
-        SessionResultsHolder.set(workoutManager.getRepRecords())
-
-        val intent = Intent(this, SummaryActivity::class.java).apply {
-            putExtra(SummaryActivity.EXTRA_EXERCISE_TYPE, exerciseType.name)
-            putExtra(SummaryActivity.EXTRA_TOTAL, summary.totalReps)
-            putExtra(SummaryActivity.EXTRA_CORRECT, summary.correctReps)
-            putExtra(SummaryActivity.EXTRA_INCORRECT, summary.incorrectReps)
-            putExtra(SummaryActivity.EXTRA_DURATION, summary.durationSeconds)
-        }
-        startActivity(intent)
+    private fun returnToSelection() {
+        startActivity(Intent(this, HomeActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        finish()
     }
 
     override fun onResume() {
         super.onResume()
-        workoutManager.resumeSession()
+        if (isFinishing || !::analyzer.isInitialized) return
+        if (sessions.currentExerciseId != exerciseSessionId) {
+            returnToSelection()
+            return
+        }
+        sessions.resumeExercise(exerciseSessionId)
         binding.overlayView.setDebugEnabled(settings.debugEnabled)
         measureLatency = settings.latencyEnabled
         workoutVisible = true
@@ -328,7 +334,7 @@ class WorkoutActivity :
 
     override fun onPause() {
         workoutVisible = false
-        workoutManager.pauseSession()
+        sessions.pauseExercise(exerciseSessionId)
         binding.workoutTimer.removeCallbacks(timerTick)
         binding.repFeedback.removeCallbacks(hideRepFeedback)
         binding.repFeedback.visibility = View.GONE
@@ -340,7 +346,7 @@ class WorkoutActivity :
         measureLatency = false
         latencyTracker.clearPending()
         // Do not join half a movement before backgrounding to one after resuming.
-        analyzer.reset()
+        if (::analyzer.isInitialized) analyzer.reset()
         landmarkSmoother.reset()
         super.onPause()
     }
@@ -356,8 +362,12 @@ class WorkoutActivity :
         super.onDestroy()
 
         landmarkSmoother.reset()
-        analyzer.reset()
+        if (::analyzer.isInitialized) analyzer.reset()
 
-        cameraExecutor.shutdown()
+        if (::cameraExecutor.isInitialized) {
+            // Wait behind submitted frames before releasing this exercise's detector.
+            cameraExecutor.execute { runOnUiThread { poseLandmarkerHelper.close() } }
+            cameraExecutor.shutdown()
+        }
     }
 }

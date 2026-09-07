@@ -76,7 +76,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Selected exercise name -->
+                <!-- Completed workout -->
                 <TextView
                     android:id="@+id/exerciseNameText"
                     android:layout_width="wrap_content"
@@ -86,7 +86,16 @@
                     android:textColor="@color/brand_cyan"
                     android:textSize="22sp"
                     android:textStyle="bold"
-                    tools:text="Squat" />
+                    tools:text="Exercises: 3" />
+
+                <TextView
+                    android:id="@+id/workoutDateText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
 
                 <!-- Performance score -->
                 <FrameLayout
@@ -176,7 +185,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="6dp"
                         android:layout_weight="1"
-                        app:statLabel="@string/summary_duration"
+                        app:statLabel="@string/summary_active_time"
                         app:statValue="0s" />
                 </LinearLayout>
 

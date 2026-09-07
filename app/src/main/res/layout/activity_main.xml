@@ -25,13 +25,13 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- 1) In-session Summary Button -->
+    <!-- Ends this exercise and returns to selection in the same workout. -->
     <Button
         android:id="@+id/summaryButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
-        android:text="Summary"
+        android:text="@string/finish_exercise"
         android:backgroundTint="#AA000000"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />

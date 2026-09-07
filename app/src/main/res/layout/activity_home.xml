@@ -64,6 +64,31 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="18sp" />
 
+            <Button
+                android:id="@+id/startWorkoutButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:layout_marginTop="24dp"
+                android:text="@string/start_workout" />
+
+            <TextView
+                android:id="@+id/workoutStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/resumeExerciseButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:text="@string/resume_exercise"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/chooseLabel"
                 android:layout_width="wrap_content"
@@ -111,6 +136,15 @@
                 app:cardSubtitle="@string/exercise_biceps_curl_subtitle"
                 app:cardTitle="@string/exercise_biceps_curl"
                 tools:ignore="ContentDescription" />
+
+            <Button
+                android:id="@+id/finishWorkoutButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:layout_marginTop="24dp"
+                android:text="@string/finish_workout"
+                android:visibility="gone" />
         </LinearLayout>
     </ScrollView>
 
