@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [WorkoutEntity::class, ExerciseSessionEntity::class, RepRecordEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class WorkoutHistoryDatabase : RoomDatabase() {

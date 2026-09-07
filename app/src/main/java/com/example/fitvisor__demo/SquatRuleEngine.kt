@@ -38,6 +38,14 @@ class SquatRuleEngine {
     private var reachedRequiredDepth = false
     private var techniqueValid = true
 
+    /**
+     * Phase as of the start of the current frame (before it's processed) —
+     * lets the analyzer peek at "are we still standing?" to drive
+     * [KneeOverToeLegTracker] *before* calling [processFrame], since its
+     * result (including any state transition) is only known afterward.
+     */
+    val phaseName: String get() = currentState.name
+
     /** Torso lean must persist for 2 consecutive frames before it invalidates. */
     private val torsoGate = ConsecutiveGate()
 
@@ -50,10 +58,19 @@ class SquatRuleEngine {
     private var bottomKnee = Double.NaN
     private var bottomTorso = Double.NaN
 
+    // Knee-over-toe accumulators, sampled at the same "deepest knee angle"
+    // moment as bottomKnee/bottomTorso above (see accumulateDebug).
+    private var bottomAnkleAngle = Double.NaN
+    private var bottomKneeToeOffset = Double.NaN
+    private var kneeOverToeConfidence = Double.NaN
+    private var kneeOverToeLegIsLeft = false
+    private var kneeOverToeAvailable = false
+
     fun processFrame(
         kneeAngle: Double,
         torsoAngle: Double,
-        kneeMisaligned: Boolean
+        kneeMisaligned: Boolean,
+        kneeOverToe: KneeOverToeMetrics? = null
     ): ExerciseAnalysisResult {
 
         var isRepCompleted = false
@@ -87,7 +104,7 @@ class SquatRuleEngine {
          * disabled upstream (kneeMisaligned is always false).
          */
         if (repInProgress) {
-            accumulateDebug(kneeAngle, torsoAngle)
+            accumulateDebug(kneeAngle, torsoAngle, kneeOverToe)
             frameRecorder.record(currentState.name) {
                 linkedMapOf("knee" to kneeAngle, "torso" to torsoAngle)
             }
@@ -152,13 +169,21 @@ class SquatRuleEngine {
         )
     }
 
-    private fun accumulateDebug(kneeAngle: Double, torsoAngle: Double) {
+    private fun accumulateDebug(kneeAngle: Double, torsoAngle: Double, kneeOverToe: KneeOverToeMetrics?) {
         minKnee = minKeepNaN(minKnee, kneeAngle)
         maxTorso = maxKeepNaN(maxTorso, torsoAngle)
-        // Deepest point = smallest knee angle; capture the torso there too.
+        // Deepest point = smallest knee angle; capture the torso (and,
+        // when available, the knee-over-toe reading) there too.
         if (!kneeAngle.isNaN() && (bottomKnee.isNaN() || kneeAngle < bottomKnee)) {
             bottomKnee = kneeAngle
             bottomTorso = torsoAngle
+            if (kneeOverToe != null) {
+                bottomAnkleAngle = kneeOverToe.ankleAngle
+                bottomKneeToeOffset = kneeOverToe.normalizedKneeToeOffset
+                kneeOverToeConfidence = kneeOverToe.confidence.toDouble()
+                kneeOverToeLegIsLeft = kneeOverToe.legIsLeft
+                kneeOverToeAvailable = true
+            }
         }
     }
 
@@ -167,9 +192,18 @@ class SquatRuleEngine {
             "minKneeAngle" to minKnee,
             "maxTorsoAngle" to maxTorso,
             "bottomKneeAngle" to bottomKnee,
-            "bottomTorsoAngle" to bottomTorso
+            "bottomTorsoAngle" to bottomTorso,
+            "ankleAngle" to bottomAnkleAngle
         ),
-        frameTrace = frameRecorder.snapshot()
+        frameTrace = frameRecorder.snapshot(),
+        flags = linkedMapOf(
+            "kneeOverToeAvailable" to kneeOverToeAvailable,
+            "kneeOverToeLegIsLeft" to kneeOverToeLegIsLeft
+        ),
+        ratios = linkedMapOf(
+            "normalizedKneeToeOffset" to bottomKneeToeOffset,
+            "kneeOverToeConfidence" to kneeOverToeConfidence
+        )
     )
 
     /** Prepares accumulators/gate/errors for a fresh repetition. */
@@ -184,6 +218,11 @@ class SquatRuleEngine {
         maxTorso = Double.NaN
         bottomKnee = Double.NaN
         bottomTorso = Double.NaN
+        bottomAnkleAngle = Double.NaN
+        bottomKneeToeOffset = Double.NaN
+        kneeOverToeConfidence = Double.NaN
+        kneeOverToeLegIsLeft = false
+        kneeOverToeAvailable = false
     }
 
     private fun finishRep() {
@@ -206,5 +245,10 @@ class SquatRuleEngine {
         maxTorso = Double.NaN
         bottomKnee = Double.NaN
         bottomTorso = Double.NaN
+        bottomAnkleAngle = Double.NaN
+        bottomKneeToeOffset = Double.NaN
+        kneeOverToeConfidence = Double.NaN
+        kneeOverToeLegIsLeft = false
+        kneeOverToeAvailable = false
     }
 }

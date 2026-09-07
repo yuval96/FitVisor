@@ -36,6 +36,19 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
+    <!-- Opens the current workout's summary without ending the exercise or
+         workout; the user returns here afterward with all state intact. -->
+    <Button
+        android:id="@+id/viewSummaryButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp"
+        android:text="@string/view_summary"
+        android:backgroundTint="#AA000000"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/summaryButton" />
+
     <!-- Selected exercise name -->
     <TextView
         android:id="@+id/exerciseTitle"

@@ -158,4 +158,39 @@ object KinematicCalculator {
         imageWidth: Int,
         imageHeight: Int
     ): Double = angleFromVertical(shoulder, hip, imageWidth, imageHeight)
+
+    /**
+     * How far [knee] sits forward of [ankle], projected onto the ankle->
+     * [footIndex] direction and normalized by foot length (the ankle-to-toe
+     * distance) — a "knee-over-toe" signal in units of foot lengths: ~0 means
+     * the knee is directly above the ankle, and approaching/exceeding 1.0
+     * means it has traveled as far forward as the toe itself.
+     *
+     * Deliberately vector/foot-relative rather than a raw `knee.x > foot.x`
+     * comparison: since both vectors are derived from the same two body
+     * landmarks, the result is correct regardless of which way the user faces,
+     * front-camera mirroring, or distance from the camera (no absolute image
+     * coordinate or resolution dependence).
+     *
+     * Returns [Double.NaN] for a degenerate (zero-length) foot vector.
+     */
+    fun normalizedKneeToeOffset(
+        knee: NormalizedLandmark,
+        ankle: NormalizedLandmark,
+        footIndex: NormalizedLandmark,
+        imageWidth: Int,
+        imageHeight: Int
+    ): Double {
+        val footX = (footIndex.x() - ankle.x()) * imageWidth
+        val footY = (footIndex.y() - ankle.y()) * imageHeight
+        val footLength = kotlin.math.sqrt((footX * footX + footY * footY).toDouble())
+        if (footLength == 0.0) return Double.NaN
+
+        val kneeX = (knee.x() - ankle.x()) * imageWidth
+        val kneeY = (knee.y() - ankle.y()) * imageHeight
+
+        // Scalar projection of the knee vector onto the foot's forward axis.
+        val forwardDistance = (kneeX * footX + kneeY * footY) / footLength
+        return forwardDistance / footLength
+    }
 }

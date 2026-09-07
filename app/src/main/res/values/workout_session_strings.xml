@@ -8,6 +8,7 @@
     <string name="workout_unavailable">This workout is no longer available. Start a new workout.</string>
     <string name="workout_exercise_count">Exercises: %1$d</string>
     <string name="workout_time_range">Started: %1$s\nFinished: %2$s</string>
+    <string name="workout_time_range_in_progress">Started: %1$s\nIn progress</string>
     <string name="exercise_summary_title">%1$d. %2$s</string>
     <string name="exercise_summary_totals">Reps: %1$d · Correct: %2$d · Incorrect: %3$d\nActive time: %4$s</string>
     <string name="summary_active_time">Active Time</string>
@@ -22,4 +23,9 @@
     <string name="delete_workout_message">This removes the workout and all its recorded reps. This can\'t be undone.</string>
     <string name="delete">Delete</string>
     <string name="cancel">Cancel</string>
+
+    <!-- Interim (mid-workout) summary -->
+    <string name="view_summary">Summary</string>
+    <string name="summary_title_in_progress">Workout In Progress</string>
+    <string name="summary_back_to_workout">Back to Workout</string>
 </resources>

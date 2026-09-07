@@ -94,6 +94,14 @@ class WorkoutActivity :
         binding.summaryButton.setOnClickListener {
             finishExercise()
         }
+        // Opens Summary in "interim" mode: a plain forward navigation (no
+        // CLEAR_TOP, no finish() here), so this Activity stays on the back
+        // stack and simply resumes — with its existing onPause/onResume
+        // pause-and-restore behavior — once the user returns from Summary.
+        binding.viewSummaryButton.setOnClickListener {
+            startActivity(Intent(this, SummaryActivity::class.java)
+                .putExtra(SummaryActivity.EXTRA_SHOW_ACTIVE_WORKOUT, true))
+        }
         // Back also ends only this exercise, preserving its completed reps.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = finishExercise()

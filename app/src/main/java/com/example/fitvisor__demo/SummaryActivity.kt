@@ -16,15 +16,22 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 /**
- * Completed workout summary, loaded by ID from the workout history database.
- * Counts and details come from the same persisted record, with an ordered
- * section for every exercise session (including repeated types) — the same
- * summary whether opened right after finishing a workout or later from History.
+ * Workout summary. Either the final, persisted record (loaded by ID from the
+ * workout history database — reached from Home or History), or the *interim*
+ * view of the still-active workout (reached from the workout screen's
+ * Summary button, via [EXTRA_SHOW_ACTIVE_WORKOUT]) — same layout and binding
+ * code either way, just a different data source and back target. Opening the
+ * interim summary never touches [ActiveWorkoutStore]: it only reads the live
+ * snapshot, so the active workout/exercise is untouched and resumes normally
+ * (via WorkoutActivity's existing onPause/onResume) when the user returns.
  */
 class SummaryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySummaryBinding
     private lateinit var repository: WorkoutHistoryRepository
+
+    /** True when showing the still-active workout rather than a finished one. */
+    private var isInterim = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,11 +42,27 @@ class SummaryActivity : AppCompatActivity() {
         BrandingInsets.applyNavySystemBars(this)
         BrandingInsets.padForSystemBars(binding.summaryRoot)
 
-        binding.backButton.setOnClickListener { goHome() }
-        binding.backHomeButton.setOnClickListener { goHome() }
+        binding.backButton.setOnClickListener { goBack() }
+        binding.backHomeButton.setOnClickListener { goBack() }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = goHome()
+            override fun handleOnBackPressed() = goBack()
         })
+
+        if (intent.getBooleanExtra(EXTRA_SHOW_ACTIVE_WORKOUT, false)) {
+            isInterim = true
+            val workout = ActiveWorkoutStore.manager.currentWorkout
+            if (workout == null) {
+                // Nothing active to show (e.g. reached this screen stale);
+                // there is no in-progress workout to go back to either.
+                isInterim = false
+                Toast.makeText(this, R.string.workout_unavailable, Toast.LENGTH_LONG).show()
+                goHome()
+                return
+            }
+            applyInterimChrome()
+            bind(workout)
+            return
+        }
 
         val workoutId = intent.getStringExtra(EXTRA_WORKOUT_ID)
         lifecycleScope.launch {
@@ -53,6 +76,17 @@ class SummaryActivity : AppCompatActivity() {
         }
     }
 
+    /** Swaps in "in progress" wording for the interim summary's title/back action. */
+    private fun applyInterimChrome() {
+        binding.summaryTitle.text = getString(R.string.summary_title_in_progress)
+        binding.backHomeButton.text = getString(R.string.summary_back_to_workout)
+    }
+
+    /** Interim: just closes, returning to the still-alive WorkoutActivity. Final: goes Home. */
+    private fun goBack() {
+        if (isInterim) finish() else goHome()
+    }
+
     private fun bind(workout: WorkoutSession) {
         val total = workout.totalReps
         val correct = workout.correctReps
@@ -60,7 +94,7 @@ class SummaryActivity : AppCompatActivity() {
         val duration = workout.durationSeconds
 
         binding.exerciseNameText.text = getString(R.string.workout_exercise_count, workout.exercises.size)
-        binding.workoutDateText.text = WorkoutTimeFormat.timeRange(this, workout.startTimeMillis, workout.endTimeMillis!!)
+        binding.workoutDateText.text = WorkoutTimeFormat.timeRangeOrInProgress(this, workout.startTimeMillis, workout.endTimeMillis)
 
         bindStats(total, correct, incorrect, duration)
         bindFormScore(total, correct)
@@ -83,7 +117,7 @@ class SummaryActivity : AppCompatActivity() {
             section.findViewById<TextView>(R.id.exerciseSessionTitle).text =
                 getString(R.string.exercise_summary_title, index + 1, exercise.exerciseType.displayName)
             section.findViewById<TextView>(R.id.exerciseSessionTimes).text =
-                WorkoutTimeFormat.timeRange(this, exercise.startTimeMillis, exercise.endTimeMillis!!)
+                WorkoutTimeFormat.timeRangeOrInProgress(this, exercise.startTimeMillis, exercise.endTimeMillis)
             section.findViewById<TextView>(R.id.exerciseSessionTotals).text =
                 getString(R.string.exercise_summary_totals, exercise.reps.size,
                     exercise.correctReps, exercise.incorrectReps, WorkoutTimeFormat.duration(exercise.durationSeconds))
@@ -204,7 +238,7 @@ class SummaryActivity : AppCompatActivity() {
             val debugView = item.findViewById<TextView>(R.id.repDebugText)
             val debugMetrics = record.debugMetrics
             if (AppSettings(this).debugEnabled &&
-                (debugMetrics.values.isNotEmpty() || debugMetrics.flags.isNotEmpty())
+                (debugMetrics.values.isNotEmpty() || debugMetrics.flags.isNotEmpty() || debugMetrics.ratios.isNotEmpty())
             ) {
                 debugView.text = formatDebugMetrics(debugMetrics)
                 debugView.visibility = View.VISIBLE
@@ -225,11 +259,18 @@ class SummaryActivity : AppCompatActivity() {
             builder.append('\n').append(prettifyLabel(label)).append(": ")
                 .append(if (value) getString(R.string.summary_rep_debug_yes) else getString(R.string.summary_rep_debug_no))
         }
+        for ((label, value) in metrics.ratios) {
+            builder.append('\n').append(prettifyLabel(label)).append(": ").append(formatRatio(value))
+        }
         return builder.toString()
     }
 
     private fun formatAngle(value: Double): String =
         if (value.isNaN()) "--" else String.format(Locale.US, "%.1f°", value)
+
+    /** Plain (no unit) formatting for dimensionless debug values, e.g. a normalized offset or a confidence score. */
+    private fun formatRatio(value: Double): String =
+        if (value.isNaN()) "--" else String.format(Locale.US, "%.2f", value)
 
     /** "minKneeAngle" -> "Min knee angle" for readable debug labels. */
     private fun prettifyLabel(key: String): String {
@@ -248,6 +289,8 @@ class SummaryActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_WORKOUT_ID = "SUMMARY_WORKOUT_ID"
+        /** Boolean extra: show the live in-progress workout instead of loading one by ID. */
+        const val EXTRA_SHOW_ACTIVE_WORKOUT = "SUMMARY_SHOW_ACTIVE_WORKOUT"
 
         private const val STRONG_SCORE = 80
         private const val MEDIUM_SCORE = 50

@@ -37,7 +37,11 @@ class WorkoutHistoryRepository(private val dao: WorkoutHistoryDao) {
                         errors = WorkoutHistoryCodec.encodeErrors(rep.errors),
                         elapsedSessionMs = rep.elapsedSessionMs,
                         debugMetrics = WorkoutHistoryCodec.encodeMetrics(rep.debugMetrics.values),
-                        debugFlags = WorkoutHistoryCodec.encodeFlags(rep.debugMetrics.flags)
+                        debugFlags = WorkoutHistoryCodec.encodeFlags(rep.debugMetrics.flags),
+                        // Same Map<String, Double> shape as debugMetrics, just a
+                        // separate column so non-angle ratios never get reloaded
+                        // into the angle-labelled `values` map.
+                        debugRatios = WorkoutHistoryCodec.encodeMetrics(rep.debugMetrics.ratios)
                     )
                 )
             }
@@ -84,7 +88,8 @@ class WorkoutHistoryRepository(private val dao: WorkoutHistoryDao) {
         elapsedSessionMs = elapsedSessionMs,
         debugMetrics = RepDebugMetrics(
             values = WorkoutHistoryCodec.decodeMetrics(debugMetrics),
-            flags = WorkoutHistoryCodec.decodeFlags(debugFlags)
+            flags = WorkoutHistoryCodec.decodeFlags(debugFlags),
+            ratios = WorkoutHistoryCodec.decodeMetrics(debugRatios)
         )
     )
 

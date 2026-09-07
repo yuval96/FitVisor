@@ -68,4 +68,66 @@ class KinematicCalculatorTest {
         )
         assertTrue(angle.isNaN())
     }
+
+    @Test
+    fun kneeToeOffset_kneeDirectlyAboveAnkle_isZero() {
+        val offset = KinematicCalculator.normalizedKneeToeOffset(
+            knee = lm(0.5f, 0.3f),
+            ankle = lm(0.5f, 0.5f),
+            footIndex = lm(0.7f, 0.5f), // foot points toward +X
+            size, size
+        )
+        assertEquals(0.0, offset, 0.01)
+    }
+
+    @Test
+    fun kneeToeOffset_kneeOneFootLengthPastToe_isOne() {
+        val offset = KinematicCalculator.normalizedKneeToeOffset(
+            knee = lm(0.7f, 0.5f), // one foot-length forward, same direction as the foot
+            ankle = lm(0.5f, 0.5f),
+            footIndex = lm(0.7f, 0.5f),
+            size, size
+        )
+        assertEquals(1.0, offset, 0.01)
+    }
+
+    @Test
+    fun kneeToeOffset_kneeBehindAnkle_isNegative() {
+        val offset = KinematicCalculator.normalizedKneeToeOffset(
+            knee = lm(0.3f, 0.5f), // behind the ankle, opposite the foot direction
+            ankle = lm(0.5f, 0.5f),
+            footIndex = lm(0.7f, 0.5f),
+            size, size
+        )
+        assertEquals(-1.0, offset, 0.01)
+    }
+
+    /**
+     * Same geometric relationship (knee one foot-length forward) as
+     * [kneeToeOffset_kneeOneFootLengthPastToe_isOne], but with the user facing
+     * the opposite way (foot pointing -X instead of +X). A hardcoded
+     * `knee.x > foot.x` rule would flip sign here; the vector-projection
+     * implementation must not, since it reads direction from the foot itself.
+     */
+    @Test
+    fun kneeToeOffset_isOrientationIndependent() {
+        val offset = KinematicCalculator.normalizedKneeToeOffset(
+            knee = lm(0.3f, 0.5f),
+            ankle = lm(0.5f, 0.5f),
+            footIndex = lm(0.3f, 0.5f), // foot points toward -X this time
+            size, size
+        )
+        assertEquals(1.0, offset, 0.01)
+    }
+
+    @Test
+    fun kneeToeOffset_degenerateFoot_returnsNaN() {
+        val offset = KinematicCalculator.normalizedKneeToeOffset(
+            knee = lm(0.5f, 0.3f),
+            ankle = lm(0.5f, 0.5f),
+            footIndex = lm(0.5f, 0.5f), // ankle == footIndex
+            size, size
+        )
+        assertTrue(offset.isNaN())
+    }
 }

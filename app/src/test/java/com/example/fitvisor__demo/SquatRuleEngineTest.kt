@@ -141,6 +141,40 @@ class SquatRuleEngineTest {
     }
 
     @Test
+    fun debugMetrics_withoutKneeOverToe_isUnavailableButDoesNotBreakOtherMetrics() {
+        engine.processFrame(170.0, 10.0, false)
+        engine.processFrame(140.0, 25.0, false)
+        engine.processFrame(90.0, 40.0, false) // no kneeOverToe passed (defaults to null)
+        val end = engine.processFrame(170.0, 10.0, false)
+
+        val metrics = requireNotNull(end.debugMetrics)
+        assertEquals(90.0, metrics.values["minKneeAngle"]!!, 0.001) // unaffected
+        assertFalse(metrics.flags["kneeOverToeAvailable"]!!)
+        assertTrue(metrics.values["ankleAngle"]!!.isNaN())
+        assertTrue(metrics.ratios["normalizedKneeToeOffset"]!!.isNaN())
+    }
+
+    @Test
+    fun debugMetrics_captureKneeOverToeAtTheDeepestKneeAngleFrame() {
+        engine.processFrame(170.0, 10.0, false)
+        engine.processFrame(140.0, 10.0, false,
+            KneeOverToeMetrics(legIsLeft = true, confidence = 0.9f, ankleAngle = 80.0, normalizedKneeToeOffset = 0.2))
+        // Deepest frame: this reading must be the one captured.
+        engine.processFrame(90.0, 10.0, false,
+            KneeOverToeMetrics(legIsLeft = false, confidence = 0.75f, ankleAngle = 70.0, normalizedKneeToeOffset = 0.9))
+        engine.processFrame(120.0, 10.0, false,
+            KneeOverToeMetrics(legIsLeft = true, confidence = 0.95f, ankleAngle = 85.0, normalizedKneeToeOffset = 0.1))
+        val end = engine.processFrame(170.0, 10.0, false)
+
+        val metrics = requireNotNull(end.debugMetrics)
+        assertTrue(metrics.flags["kneeOverToeAvailable"]!!)
+        assertFalse(metrics.flags["kneeOverToeLegIsLeft"]!!) // the deepest-frame reading was the right leg
+        assertEquals(70.0, metrics.values["ankleAngle"]!!, 0.001)
+        assertEquals(0.9, metrics.ratios["normalizedKneeToeOffset"]!!, 0.001)
+        assertEquals(0.75, metrics.ratios["kneeOverToeConfidence"]!!, 0.001)
+    }
+
+    @Test
     fun stayingStanding_doesNotDoubleCount() {
         // One valid rep.
         feed(170.0, 10.0)

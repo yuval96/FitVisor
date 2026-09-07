@@ -23,19 +23,22 @@ data class RepFrameSample(
  *
  * [values] is an ordered label -> angle (degrees) map of aggregate measurements
  * for the repetition (e.g. "minKneeAngle", "maxTorsoAngle"). [flags] holds any
- * non-angle boolean state (e.g. "startDetected") kept separate so display code
- * never has to guess a label's unit from its name. [frameTrace] is the
- * optional, capped frame-by-frame trace; it's empty unless the trace is
- * explicitly enabled (a compile-time, debug-only switch) and is never rendered
- * in the normal summary.
+ * non-angle boolean state (e.g. "startDetected"), and [ratios] holds any
+ * non-angle *numeric* value (e.g. a normalized offset or a confidence score,
+ * both 0..1-ish) — both kept separate from [values] so display code never has
+ * to guess a label's unit from its name (a plain angle-suffix would be wrong
+ * for these). [frameTrace] is the optional, capped frame-by-frame trace; it's
+ * empty unless the trace is explicitly enabled (a compile-time, debug-only
+ * switch) and is never rendered in the normal summary.
  */
 data class RepDebugMetrics(
     val values: Map<String, Double>,
     val frameTrace: List<RepFrameSample> = emptyList(),
-    val flags: Map<String, Boolean> = emptyMap()
+    val flags: Map<String, Boolean> = emptyMap(),
+    val ratios: Map<String, Double> = emptyMap()
 ) {
     companion object {
-        val EMPTY = RepDebugMetrics(emptyMap(), emptyList(), emptyMap())
+        val EMPTY = RepDebugMetrics(emptyMap(), emptyList(), emptyMap(), emptyMap())
     }
 }
 
