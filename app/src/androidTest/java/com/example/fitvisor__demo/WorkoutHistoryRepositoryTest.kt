@@ -77,7 +77,11 @@ class WorkoutHistoryRepositoryTest {
         assertEquals(mapOf("startDetected" to true), pushUpRep.debugMetrics.flags)
     }
 
-    @Test fun savingAnUnfinishedWorkoutThrows() = runBlocking {
+    // A plain (non-runBlocking) body: assertThrows's own return value would
+    // otherwise become this function's inferred return type, which the
+    // on-device JUnit4 runner rejects for @Test methods (must be void) even
+    // though the JVM unit-test runner silently accepts it.
+    @Test fun savingAnUnfinishedWorkoutThrows() {
         val workout = WorkoutSession("unfinished", 1_000L, endTimeMillis = null)
         assertThrows(IllegalStateException::class.java) {
             runBlocking { repository.saveCompletedWorkout(workout) }
