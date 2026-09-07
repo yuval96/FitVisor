@@ -1,5 +1,12 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.model.ExerciseType
+import com.example.fitvisor__demo.model.RepDebugMetrics
+import com.example.fitvisor__demo.model.RepError
+import com.example.fitvisor__demo.model.RepFrameSample
+import com.example.fitvisor__demo.workout.ExerciseSession
+import com.example.fitvisor__demo.workout.WorkoutSession
+import com.example.fitvisor__demo.workout.WorkoutSessionManager
 import org.junit.Assert.*
 import org.junit.Test
 

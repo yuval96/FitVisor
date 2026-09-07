@@ -1,5 +1,7 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.model.RepError
+import com.example.fitvisor__demo.workout.WorkoutHistoryCodec
 import org.junit.Assert.*
 import org.junit.Test
 

@@ -1,5 +1,7 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.exercises.pushup.PushUpRuleEngine
+import com.example.fitvisor__demo.model.RepError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

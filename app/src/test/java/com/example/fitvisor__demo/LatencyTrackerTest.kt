@@ -1,5 +1,6 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.settings.LatencyTracker
 import org.junit.Assert.assertTrue
 import org.junit.Test
 

@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".WorkoutActivity">
+    tools:context=".ui.workout.WorkoutActivity">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
@@ -16,7 +16,7 @@
         app:layout_constraintTop_toTopOf="parent"
         app:scaleType="fillCenter" />
 
-    <com.example.fitvisor__demo.OverlayView
+    <com.example.fitvisor__demo.ui.workout.OverlayView
         android:id="@+id/overlayView"
         android:layout_width="0dp"
         android:layout_height="0dp"

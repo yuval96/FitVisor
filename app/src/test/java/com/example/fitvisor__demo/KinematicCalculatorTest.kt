@@ -1,5 +1,6 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.kinematics.KinematicCalculator
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

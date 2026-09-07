@@ -1,5 +1,8 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.exercises.squat.KneeOverToeMetrics
+import com.example.fitvisor__demo.exercises.squat.SquatRuleEngine
+import com.example.fitvisor__demo.model.RepError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

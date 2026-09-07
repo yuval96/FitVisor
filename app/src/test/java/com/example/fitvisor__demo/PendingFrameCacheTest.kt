@@ -1,5 +1,6 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.pose.PendingFrameCache
 import org.junit.Assert.*
 import org.junit.Test
 

@@ -7,6 +7,14 @@ import android.widget.TextView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.fitvisor__demo.model.ExerciseType
+import com.example.fitvisor__demo.model.RepDebugMetrics
+import com.example.fitvisor__demo.model.RepError
+import com.example.fitvisor__demo.ui.home.HomeActivity
+import com.example.fitvisor__demo.ui.summary.SummaryActivity
+import com.example.fitvisor__demo.workout.ActiveWorkoutStore
+import com.example.fitvisor__demo.workout.WorkoutHistoryRepository
+import com.example.fitvisor__demo.workout.WorkoutSession
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*

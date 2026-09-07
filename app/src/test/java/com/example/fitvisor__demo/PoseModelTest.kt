@@ -1,5 +1,6 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.settings.PoseModel
 import java.io.File
 import java.util.zip.CRC32
 import java.util.zip.ZipFile

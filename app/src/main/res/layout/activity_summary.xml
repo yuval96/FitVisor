@@ -104,7 +104,7 @@
                     android:layout_gravity="center_horizontal"
                     android:layout_marginTop="16dp">
 
-                    <com.example.fitvisor__demo.CircularProgressView
+                    <com.example.fitvisor__demo.ui.summary.CircularProgressView
                         android:id="@+id/formScoreRing"
                         android:layout_width="184dp"
                         android:layout_height="184dp"
@@ -143,7 +143,7 @@
                     android:layout_marginTop="28dp"
                     android:orientation="horizontal">
 
-                    <com.example.fitvisor__demo.StatCardView
+                    <com.example.fitvisor__demo.ui.summary.StatCardView
                         android:id="@+id/statTotal"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -152,7 +152,7 @@
                         app:statLabel="@string/summary_total_reps"
                         app:statValue="0" />
 
-                    <com.example.fitvisor__demo.StatCardView
+                    <com.example.fitvisor__demo.ui.summary.StatCardView
                         android:id="@+id/statCorrect"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -169,7 +169,7 @@
                     android:layout_marginTop="12dp"
                     android:orientation="horizontal">
 
-                    <com.example.fitvisor__demo.StatCardView
+                    <com.example.fitvisor__demo.ui.summary.StatCardView
                         android:id="@+id/statIncorrect"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
@@ -179,7 +179,7 @@
                         app:statValue="0"
                         app:statValueColor="@color/feedback_error" />
 
-                    <com.example.fitvisor__demo.StatCardView
+                    <com.example.fitvisor__demo.ui.summary.StatCardView
                         android:id="@+id/statDuration"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"

@@ -16,7 +16,7 @@
         android:theme="@style/Theme.AppCompat.NoActionBar">
         
         <activity
-            android:name=".HomeActivity"
+            android:name=".ui.home.HomeActivity"
             android:exported="true"
             android:theme="@style/Theme.FitVisor.Starting">
             <intent-filter>
@@ -26,15 +26,15 @@
         </activity>
 
         <activity
-            android:name=".WorkoutActivity"
+            android:name=".ui.workout.WorkoutActivity"
             android:exported="false" />
 
         <activity
-            android:name=".SummaryActivity"
+            android:name=".ui.summary.SummaryActivity"
             android:exported="false" />
 
         <activity
-            android:name=".SettingsActivity"
+            android:name=".ui.settings.SettingsActivity"
             android:exported="false" />
 
     </application>

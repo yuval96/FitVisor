@@ -3,6 +3,14 @@ package com.example.fitvisor__demo
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.fitvisor__demo.model.ExerciseType
+import com.example.fitvisor__demo.model.RepDebugMetrics
+import com.example.fitvisor__demo.model.RepError
+import com.example.fitvisor__demo.model.RepRecord
+import com.example.fitvisor__demo.workout.ExerciseSession
+import com.example.fitvisor__demo.workout.WorkoutHistoryDatabase
+import com.example.fitvisor__demo.workout.WorkoutHistoryRepository
+import com.example.fitvisor__demo.workout.WorkoutSession
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.*

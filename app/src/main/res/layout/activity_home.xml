@@ -100,7 +100,7 @@
                 android:textSize="24sp"
                 android:textStyle="bold" />
 
-            <com.example.fitvisor__demo.ExerciseCardView
+            <com.example.fitvisor__demo.ui.home.ExerciseCardView
                 android:id="@+id/cardSquat"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -109,7 +109,7 @@
                 app:cardSubtitle="@string/exercise_squat_subtitle"
                 app:cardTitle="@string/exercise_squat" />
 
-            <com.example.fitvisor__demo.ExerciseCardView
+            <com.example.fitvisor__demo.ui.home.ExerciseCardView
                 android:id="@+id/cardPushUp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -118,7 +118,7 @@
                 app:cardSubtitle="@string/exercise_pushup_subtitle"
                 app:cardTitle="@string/exercise_pushup" />
 
-            <com.example.fitvisor__demo.ExerciseCardView
+            <com.example.fitvisor__demo.ui.home.ExerciseCardView
                 android:id="@+id/cardShoulderPress"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -127,7 +127,7 @@
                 app:cardSubtitle="@string/exercise_shoulder_press_subtitle"
                 app:cardTitle="@string/exercise_shoulder_press" />
 
-            <com.example.fitvisor__demo.ExerciseCardView
+            <com.example.fitvisor__demo.ui.home.ExerciseCardView
                 android:id="@+id/cardBicepsCurl"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

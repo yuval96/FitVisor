@@ -1,5 +1,7 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.exercises.squat.KneeOverToeLegTracker
+import com.example.fitvisor__demo.pose.SideSelector
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test

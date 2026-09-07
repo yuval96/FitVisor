@@ -4,6 +4,9 @@ import android.content.Intent
 import android.widget.RadioGroup
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.fitvisor__demo.settings.AppSettings
+import com.example.fitvisor__demo.settings.PoseModel
+import com.example.fitvisor__demo.ui.settings.SettingsActivity
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode

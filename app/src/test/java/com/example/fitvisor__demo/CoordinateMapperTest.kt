@@ -1,5 +1,6 @@
 package com.example.fitvisor__demo
 
+import com.example.fitvisor__demo.ui.workout.CoordinateMapper
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
