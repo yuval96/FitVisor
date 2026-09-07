@@ -26,4 +26,17 @@ object WorkoutHistoryCodec {
         }
         return result
     }
+
+    fun encodeFlags(flags: Map<String, Boolean>): String = flags.entries.joinToString(",") { (key, value) -> "$key=$value" }
+
+    fun decodeFlags(raw: String): Map<String, Boolean> {
+        if (raw.isEmpty()) return emptyMap()
+        val result = LinkedHashMap<String, Boolean>()
+        for (entry in raw.split(",")) {
+            val separator = entry.indexOf('=')
+            if (separator < 0) continue
+            result[entry.substring(0, separator)] = entry.substring(separator + 1).toBoolean()
+        }
+        return result
+    }
 }

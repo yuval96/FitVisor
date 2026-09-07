@@ -17,19 +17,25 @@ data class RepFrameSample(
 )
 
 /**
- * Lightweight per-repetition debug data for on-device threshold tuning.
+ * Useful per-repetition measurements, recorded for every rep regardless of
+ * [AppSettings.debugEnabled] so they're available in the workout summary and
+ * persisted history — not just for on-device threshold tuning.
  *
- * [values] is an ordered label -> angle map of aggregate measurements for the
- * repetition (e.g. "minKneeAngle", "maxTorsoAngle"). [frameTrace] is the
- * optional, capped frame-by-frame trace and is empty unless the trace is
- * explicitly enabled; it is never rendered in the normal summary.
+ * [values] is an ordered label -> angle (degrees) map of aggregate measurements
+ * for the repetition (e.g. "minKneeAngle", "maxTorsoAngle"). [flags] holds any
+ * non-angle boolean state (e.g. "startDetected") kept separate so display code
+ * never has to guess a label's unit from its name. [frameTrace] is the
+ * optional, capped frame-by-frame trace; it's empty unless the trace is
+ * explicitly enabled (a compile-time, debug-only switch) and is never rendered
+ * in the normal summary.
  */
 data class RepDebugMetrics(
     val values: Map<String, Double>,
-    val frameTrace: List<RepFrameSample> = emptyList()
+    val frameTrace: List<RepFrameSample> = emptyList(),
+    val flags: Map<String, Boolean> = emptyMap()
 ) {
     companion object {
-        val EMPTY = RepDebugMetrics(emptyMap(), emptyList())
+        val EMPTY = RepDebugMetrics(emptyMap(), emptyList(), emptyMap())
     }
 }
 

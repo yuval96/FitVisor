@@ -202,10 +202,11 @@ class SummaryActivity : AppCompatActivity() {
             }
 
             val debugView = item.findViewById<TextView>(R.id.repDebugText)
+            val debugMetrics = record.debugMetrics
             if (AppSettings(this).debugEnabled &&
-                record.debugMetrics.values.isNotEmpty()
+                (debugMetrics.values.isNotEmpty() || debugMetrics.flags.isNotEmpty())
             ) {
-                debugView.text = formatDebugMetrics(record.debugMetrics)
+                debugView.text = formatDebugMetrics(debugMetrics)
                 debugView.visibility = View.VISIBLE
             } else {
                 debugView.visibility = View.GONE
@@ -218,11 +219,11 @@ class SummaryActivity : AppCompatActivity() {
     private fun formatDebugMetrics(metrics: RepDebugMetrics): String {
         val builder = StringBuilder(getString(R.string.summary_rep_debug_header))
         for ((label, value) in metrics.values) {
-            builder.append('\n')
-                .append(prettifyLabel(label))
-                .append(": ")
-                .append(if (label == "startDetected" || label == "topReached")
-                    String.format(Locale.US, "%.0f", value) else formatAngle(value))
+            builder.append('\n').append(prettifyLabel(label)).append(": ").append(formatAngle(value))
+        }
+        for ((label, value) in metrics.flags) {
+            builder.append('\n').append(prettifyLabel(label)).append(": ")
+                .append(if (value) getString(R.string.summary_rep_debug_yes) else getString(R.string.summary_rep_debug_no))
         }
         return builder.toString()
     }

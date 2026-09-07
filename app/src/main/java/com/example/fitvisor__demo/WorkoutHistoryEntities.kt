@@ -25,9 +25,10 @@ data class ExerciseSessionEntity(
 )
 
 /**
- * Room row for one [RepRecord]. [errors] and [debugMetrics] are encoded strings
- * (see [WorkoutHistoryCodec]) rather than a normalized table/TypeConverter,
- * since they're small, order-sensitive, and only ever read back as a whole.
+ * Room row for one [RepRecord]. [errors], [debugMetrics] and [debugFlags] are
+ * encoded strings (see [WorkoutHistoryCodec]) rather than a normalized
+ * table/TypeConverter, since they're small, order-sensitive, and only ever
+ * read back as a whole.
  */
 @Entity(tableName = "rep_records")
 data class RepRecordEntity(
@@ -38,5 +39,6 @@ data class RepRecordEntity(
     val isCorrect: Boolean,
     val errors: String,
     val elapsedSessionMs: Long,
-    val debugMetrics: String
+    val debugMetrics: String,
+    val debugFlags: String = ""
 )

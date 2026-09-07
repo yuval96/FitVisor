@@ -31,4 +31,15 @@ class WorkoutHistoryCodecTest {
     @Test fun emptyMetricsRoundTripToEmptyMap() {
         assertEquals(emptyMap<String, Double>(), WorkoutHistoryCodec.decodeMetrics(WorkoutHistoryCodec.encodeMetrics(emptyMap())))
     }
+
+    @Test fun flagsRoundTripInOrder() {
+        val flags = linkedMapOf("startDetected" to true, "topReached" to false)
+        val decoded = WorkoutHistoryCodec.decodeFlags(WorkoutHistoryCodec.encodeFlags(flags))
+        assertEquals(flags, decoded)
+        assertEquals(flags.keys.toList(), decoded.keys.toList())
+    }
+
+    @Test fun emptyFlagsRoundTripToEmptyMap() {
+        assertEquals(emptyMap<String, Boolean>(), WorkoutHistoryCodec.decodeFlags(WorkoutHistoryCodec.encodeFlags(emptyMap())))
+    }
 }

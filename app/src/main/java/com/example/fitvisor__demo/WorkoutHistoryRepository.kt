@@ -36,7 +36,8 @@ class WorkoutHistoryRepository(private val dao: WorkoutHistoryDao) {
                         isCorrect = rep.isCorrect,
                         errors = WorkoutHistoryCodec.encodeErrors(rep.errors),
                         elapsedSessionMs = rep.elapsedSessionMs,
-                        debugMetrics = WorkoutHistoryCodec.encodeMetrics(rep.debugMetrics.values)
+                        debugMetrics = WorkoutHistoryCodec.encodeMetrics(rep.debugMetrics.values),
+                        debugFlags = WorkoutHistoryCodec.encodeFlags(rep.debugMetrics.flags)
                     )
                 )
             }
@@ -81,7 +82,10 @@ class WorkoutHistoryRepository(private val dao: WorkoutHistoryDao) {
         isCorrect = isCorrect,
         errors = WorkoutHistoryCodec.decodeErrors(errors),
         elapsedSessionMs = elapsedSessionMs,
-        debugMetrics = RepDebugMetrics(WorkoutHistoryCodec.decodeMetrics(debugMetrics))
+        debugMetrics = RepDebugMetrics(
+            values = WorkoutHistoryCodec.decodeMetrics(debugMetrics),
+            flags = WorkoutHistoryCodec.decodeFlags(debugFlags)
+        )
     )
 
     companion object {

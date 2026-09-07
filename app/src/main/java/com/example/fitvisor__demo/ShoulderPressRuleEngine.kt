@@ -270,13 +270,15 @@ class ShoulderPressRuleEngine {
             "minElbowAngle" to minElbow,
             "maxElbowAngle" to maxElbow,
             "topElbowAngle" to topElbow,
-            "maxTorsoAngle" to maxTorso,
-            // Flags encoded 1.0/0.0 (structured per-rep debug; the precise
-            // start elbow->shoulder difference is logged to Logcat).
-            "startDetected" to if (sawStart) 1.0 else 0.0,
-            "topReached" to if (topReached) 1.0 else 0.0
+            "maxTorsoAngle" to maxTorso
         ),
-        frameTrace = frameRecorder.snapshot()
+        frameTrace = frameRecorder.snapshot(),
+        // Non-angle state; the precise start elbow->shoulder difference is
+        // logged to Logcat separately.
+        flags = linkedMapOf(
+            "startDetected" to sawStart,
+            "topReached" to topReached
+        )
     )
 
     private fun finishRep(returnElbowShoulder: Double, atStartPose: Boolean) {

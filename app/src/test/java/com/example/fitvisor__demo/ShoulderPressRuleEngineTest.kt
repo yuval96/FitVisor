@@ -71,6 +71,19 @@ class ShoulderPressRuleEngineTest {
     }
 
     @Test
+    fun completedRepDebugMetricsSeparateAnglesFromFlags() {
+        establishStart()
+        reachTop()
+        val end = returnToStart()
+
+        val metrics = end.debugMetrics!!
+        assertTrue("startDetected/topReached belong in flags, not the angle map",
+            metrics.values.keys.none { it == "startDetected" || it == "topReached" })
+        assertEquals(mapOf("startDetected" to true, "topReached" to true), metrics.flags)
+        assertTrue(metrics.values.containsKey("minElbowAngle"))
+    }
+
+    @Test
     fun reachingTopWithoutReturning_doesNotCount() {
         establishStart()
         reachTop()

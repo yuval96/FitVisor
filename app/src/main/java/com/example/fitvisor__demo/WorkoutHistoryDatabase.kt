@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [WorkoutEntity::class, ExerciseSessionEntity::class, RepRecordEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class WorkoutHistoryDatabase : RoomDatabase() {
@@ -22,7 +22,11 @@ abstract class WorkoutHistoryDatabase : RoomDatabase() {
                     context.applicationContext,
                     WorkoutHistoryDatabase::class.java,
                     "fitvisor_workout_history.db"
-                ).build().also { instance = it }
+                )
+                    // No migration path is defined yet; a bumped schema simply
+                    // starts History fresh rather than crashing on open.
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
     }
 }

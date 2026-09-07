@@ -64,6 +64,8 @@
     <string name="summary_rep_incorrect">✗ Incorrect</string>
     <string name="summary_rep_none">No repetitions were recorded.</string>
     <string name="summary_rep_debug_header">Debug:</string>
+    <string name="summary_rep_debug_yes">Yes</string>
+    <string name="summary_rep_debug_no">No</string>
 
     <!-- Feedback messages (selected from real rep counts) -->
     <string name="feedback_none">No repetitions were recorded. Make sure your whole body stays visible and complete full reps.</string>

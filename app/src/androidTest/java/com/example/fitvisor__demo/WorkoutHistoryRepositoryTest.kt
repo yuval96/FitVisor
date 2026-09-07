@@ -48,7 +48,8 @@ class WorkoutHistoryRepositoryTest {
             startTimeMillis = start + 20_000,
             endTimeMillis = start + 25_000,
             durationSeconds = 5,
-            reps = listOf(RepRecord(1, ExerciseType.PUSH_UP, true, emptyList(), 3_000, RepDebugMetrics.EMPTY))
+            reps = listOf(RepRecord(1, ExerciseType.PUSH_UP, true, emptyList(), 3_000,
+                RepDebugMetrics(mapOf("minElbowAngle" to 70.0), flags = mapOf("startDetected" to true))))
         )
         return WorkoutSession(id, start, start + 25_000, listOf(exercise1, exercise2))
     }
@@ -70,6 +71,10 @@ class WorkoutHistoryRepositoryTest {
         assertEquals(listOf(RepError.INSUFFICIENT_DEPTH), squatReps[1].errors)
         assertEquals(90.0, squatReps[0].debugMetrics.values["minKneeAngle"]!!, 0.0)
         assertEquals(140.0, squatReps[1].debugMetrics.values["minKneeAngle"]!!, 0.0)
+
+        val pushUpRep = loaded.exercises[1].reps.single()
+        assertEquals(70.0, pushUpRep.debugMetrics.values["minElbowAngle"]!!, 0.0)
+        assertEquals(mapOf("startDetected" to true), pushUpRep.debugMetrics.flags)
     }
 
     @Test fun savingAnUnfinishedWorkoutThrows() = runBlocking {
