@@ -60,4 +60,7 @@ class CoordinateMapper {
     fun getPreviewBounds(): RectF {
         return RectF(offsetX, offsetY, offsetX + previewWidth * scale, offsetY + previewHeight * scale)
     }
+
+    /** True when X is horizontally flipped (front-camera selfie view). */
+    fun isMirrored(): Boolean = isMirrored
 }

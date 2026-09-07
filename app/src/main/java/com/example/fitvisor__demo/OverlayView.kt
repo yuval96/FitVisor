@@ -1,8 +1,10 @@
 package com.example.fitvisor__demo
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.util.AttributeSet
 import android.view.View
@@ -23,12 +25,30 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
     private val mapper = CoordinateMapper()
     private var smoothedLandmarks: List<NormalizedLandmark>? = null
 
+    /**
+     * The exact camera frame the current [smoothedLandmarks] were computed from.
+     * Drawing it here (instead of relying on the live PreviewView) keeps the body
+     * image and the skeleton in perfect sync, so the skeleton never trails the
+     * live movement — at the cost of the shown image lagging reality by the
+     * pipeline latency, which is acceptable for form feedback.
+     */
+    private var frameBitmap: Bitmap? = null
+
     private var metrics: OverlayMetrics = OverlayMetrics.EMPTY
 
     private var isDebugMode = false
 
+    /** When false, no synced frame or skeleton is drawn; the live preview shows through. */
+    private var showSkeleton = true
+
     fun setDebugEnabled(enabled: Boolean) {
         isDebugMode = enabled
+        invalidate()
+    }
+
+    /** Toggles the synced camera frame + skeleton, independently of debug mode. */
+    fun setShowSkeleton(enabled: Boolean) {
+        showSkeleton = enabled
         invalidate()
     }
 
@@ -36,6 +56,8 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
     private val linePaint = Paint()
     private val angleTextPaint = Paint()
     private val debugPaint = Paint()
+    private val framePaint = Paint().apply { isFilterBitmap = true; isAntiAlias = true }
+    private val frameMatrix = Matrix()
 
     init {
         initPaints()
@@ -60,31 +82,51 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
 
     override fun draw(canvas: Canvas) {
         super.draw(canvas)
-        if (!isDebugMode) return
+
+        // When the skeleton is on, paint the synced frame + skeleton. When off,
+        // draw nothing here so the zero-latency live PreviewView shows through.
+        if (showSkeleton) {
+            frameBitmap?.let { drawFrame(canvas, it) }
+            drawSkeleton(canvas)
+        }
 
         if (isDebugMode) {
             canvas.drawRect(mapper.getPreviewBounds(), debugPaint)
+            drawMetrics(canvas)
+        }
+    }
+
+    /** Blits the analyzed frame into the same bounds/mirroring the mapper uses for landmarks. */
+    private fun drawFrame(canvas: Canvas, bitmap: Bitmap) {
+        if (bitmap.width <= 0 || bitmap.height <= 0) return
+        val bounds = mapper.getPreviewBounds()
+        if (bounds.width() <= 0f || bounds.height() <= 0f) return
+
+        frameMatrix.reset()
+        frameMatrix.setScale(bounds.width() / bitmap.width, bounds.height() / bitmap.height)
+        frameMatrix.postTranslate(bounds.left, bounds.top)
+        if (mapper.isMirrored()) {
+            frameMatrix.postScale(-1f, 1f, bounds.centerX(), bounds.centerY())
+        }
+        canvas.drawBitmap(bitmap, frameMatrix, framePaint)
+    }
+
+    private fun drawSkeleton(canvas: Canvas) {
+        val landmarks = smoothedLandmarks ?: return
+        PoseLandmarker.POSE_LANDMARKS.forEach { connection ->
+            val start = landmarks[connection.start()]
+            val end = landmarks[connection.end()]
+
+            canvas.drawLine(
+                mapper.mapX(start.x()), mapper.mapY(start.y()),
+                mapper.mapX(end.x()), mapper.mapY(end.y()),
+                linePaint
+            )
         }
 
-        smoothedLandmarks?.let { landmarks ->
-            PoseLandmarker.POSE_LANDMARKS.forEach { connection ->
-                val start = landmarks[connection.start()]
-                val end = landmarks[connection.end()]
-
-                canvas.drawLine(
-                    mapper.mapX(start.x()), mapper.mapY(start.y()),
-                    mapper.mapX(end.x()), mapper.mapY(end.y()),
-                    linePaint
-                )
-            }
-
-            for (landmark in landmarks) {
-                canvas.drawPoint(mapper.mapX(landmark.x()), mapper.mapY(landmark.y()), pointPaint)
-            }
+        for (landmark in landmarks) {
+            canvas.drawPoint(mapper.mapX(landmark.x()), mapper.mapY(landmark.y()), pointPaint)
         }
-
-        drawMetrics(canvas)
-
     }
 
     /** Draws each metric line plus the phase, stacked up from the bottom-left. */
@@ -110,11 +152,13 @@ class OverlayView(context: Context?, attrs: AttributeSet?) : View(context, attrs
 
     fun setResults(
         landmarks: List<NormalizedLandmark>?,
+        frame: Bitmap?,
         imageHeight: Int,
         imageWidth: Int,
         metrics: OverlayMetrics
     ) {
         this.smoothedLandmarks = landmarks
+        this.frameBitmap = frame
         this.metrics = metrics
 
         // Sync mapper with layout - assume mirrored for front camera

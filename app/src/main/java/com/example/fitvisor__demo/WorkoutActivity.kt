@@ -220,6 +220,7 @@ class WorkoutActivity :
 
     override fun onResults(
         result: PoseLandmarkerResult,
+        inputFrame: Bitmap?,
         imageHeight: Int,
         imageWidth: Int
     ) {
@@ -269,6 +270,7 @@ class WorkoutActivity :
 
             binding.overlayView.setResults(
                 smoothedLandmarks,
+                inputFrame,
                 imageHeight,
                 imageWidth,
                 output.metrics
@@ -326,6 +328,7 @@ class WorkoutActivity :
         }
         sessions.resumeExercise(exerciseSessionId)
         binding.overlayView.setDebugEnabled(settings.debugEnabled)
+        binding.overlayView.setShowSkeleton(settings.showSkeleton)
         measureLatency = settings.latencyEnabled
         workoutVisible = true
         binding.workoutTimer.removeCallbacks(timerTick)

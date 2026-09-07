@@ -49,6 +49,15 @@ class AppSettings(context: Context) {
         get() = PoseModel.fromNameOrDefault(prefs.getString(KEY_MODEL, null))
         set(value) { prefs.edit().putString(KEY_MODEL, value.name).apply() }
 
+    /**
+     * When true, the workout overlay draws the synced camera frame + skeleton.
+     * When false, only the live camera preview is shown (no skeleton). Independent
+     * of [debugEnabled].
+     */
+    var showSkeleton: Boolean
+        get() = prefs.getBoolean(KEY_SHOW_SKELETON, DEFAULT_SHOW_SKELETON)
+        set(value) { prefs.edit().putBoolean(KEY_SHOW_SKELETON, value).apply() }
+
     var debugEnabled: Boolean
         get() = prefs.getBoolean("debug_enabled", false)
         set(value) {
@@ -72,7 +81,9 @@ class AppSettings(context: Context) {
         private const val PREFS_NAME = "fitvisor_settings"
         private const val KEY_USE_GPU = "use_gpu"
         private const val KEY_MODEL = "pose_model"
+        private const val KEY_SHOW_SKELETON = "show_skeleton"
 
         private const val DEFAULT_USE_GPU = false
+        private const val DEFAULT_SHOW_SKELETON = true
     }
 }

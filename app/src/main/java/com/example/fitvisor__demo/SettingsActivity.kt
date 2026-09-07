@@ -39,6 +39,12 @@ class SettingsActivity : AppCompatActivity() {
 
         binding.backButton.setOnClickListener { finish() }
 
+        // Skeleton overlay toggle (independent of debug tools).
+        binding.skeletonSwitch.isChecked = settings.showSkeleton
+        binding.skeletonSwitch.setOnCheckedChangeListener { _, isChecked ->
+            settings.showSkeleton = isChecked
+        }
+
         // GPU delegate toggle.
         binding.gpuSwitch.isChecked = settings.useGpu
         binding.gpuSwitch.setOnCheckedChangeListener { _, isChecked ->

@@ -1,7 +1,9 @@
 package com.example.fitvisor__demo
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.util.Log
+import com.google.mediapipe.framework.image.BitmapExtractor
 import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
@@ -101,8 +103,16 @@ class PoseLandmarkerHelper(
         poseLandmarker = null
     }
 
-    private fun onResults(result: PoseLandmarkerResult, input: com.google.mediapipe.framework.image.MPImage) {
-        listener.onResults(result, input.height, input.width)
+    private fun onResults(result: PoseLandmarkerResult, input: MPImage) {
+        // The input frame is what produced these landmarks; hand it back so the
+        // overlay can display it in sync with the skeleton. Built from a Bitmap
+        // (BitmapImageBuilder), so extraction returns that same bitmap.
+        val frame: Bitmap? = try {
+            BitmapExtractor.extract(input)
+        } catch (e: Exception) {
+            null
+        }
+        listener.onResults(result, frame, input.height, input.width)
     }
 
     private fun onError(error: RuntimeException) {
@@ -111,6 +121,6 @@ class PoseLandmarkerHelper(
 
     interface LandmarkerListener {
         fun onError(error: String)
-        fun onResults(result: PoseLandmarkerResult, imageHeight: Int, imageWidth: Int)
+        fun onResults(result: PoseLandmarkerResult, inputFrame: Bitmap?, imageHeight: Int, imageWidth: Int)
     }
 }

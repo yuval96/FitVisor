@@ -18,6 +18,10 @@
     <string name="settings_model_heavy">Heavy — most accurate, highest latency</string>
     <string name="settings_note">Lite, Full and Heavy are bundled. Changes take effect on your next workout. The selected model is used on GPU or CPU; an unavailable model is reported as an error and is never replaced by another model.</string>
 
+    <string name="settings_display">Display</string>
+    <string name="settings_skeleton_title">Show skeleton overlay</string>
+    <string name="settings_skeleton_subtitle">Draw the pose skeleton on a frame synced to it, so it never trails your movement. Turn off to see the live camera only.</string>
+
     <string name="exercise_squat">Squat</string>
     <string name="exercise_squat_subtitle">Track squat depth and posture</string>
     <string name="exercise_pushup">Push-Up</string>
