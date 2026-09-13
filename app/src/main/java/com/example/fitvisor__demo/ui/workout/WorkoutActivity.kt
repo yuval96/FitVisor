@@ -46,6 +46,7 @@ import com.example.fitvisor__demo.ui.BrandingInsets
 import com.example.fitvisor__demo.ui.home.HomeActivity
 import com.example.fitvisor__demo.ui.summary.SummaryActivity
 import com.example.fitvisor__demo.workout.ActiveWorkoutStore
+import com.example.fitvisor__demo.workout.PreparationCountdown
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarkerResult
 import java.util.concurrent.ExecutorService
@@ -73,6 +74,7 @@ class WorkoutActivity :
     private val latencyTracker = LatencyTracker()
     private val poseQualityTracker = PoseQualityTracker()
     private val debugSessionManager = DebugSessionManager()
+    private val preparationCountdown = PreparationCountdown()
     private val measuredFrames = PendingFrameCache<Unit>(MEASURED_FRAME_WINDOW_MILLIS)
     @Volatile private var measurePerformance = false
     @Volatile private var workoutVisible = false
@@ -301,6 +303,32 @@ class WorkoutActivity :
         }
         runOnUiThread {
             if (!workoutVisible || sessions.currentExerciseId != exerciseSessionId) return@runOnUiThread
+
+            // Give the user a few seconds to step into frame after starting
+            // (or resuming) the workout before any real analysis begins --
+            // otherwise movement while getting into position can be read as
+            // the start of an exercise and counted as an incorrect rep.
+            if (preparationCountdown.isPreparing) {
+                if (!preparationCountdown.update()) {
+                    val prepLandmarks = result.landmarks().firstOrNull()
+                    val prepSmoothed = prepLandmarks?.let { landmarkSmoother.smooth(it) }
+                    binding.overlayView.setResults(
+                        prepSmoothed, inputFrame, imageHeight, imageWidth,
+                        OverlayMetrics.EMPTY
+                    )
+                    binding.correctionFeedback.text =
+                        getString(R.string.workout_get_ready, preparationCountdown.secondsRemaining ?: 1)
+                    binding.correctionFeedback.visibility = View.VISIBLE
+                    return@runOnUiThread
+                }
+                // Countdown just elapsed: the exercise engine was never fed
+                // frames during preparation (only the skeleton overlay was),
+                // so this is a defensive reset -- it guarantees a clean start
+                // regardless of whatever state the engine was left in before
+                // this workout became visible (e.g. a pause mid-repetition).
+                analyzer.reset()
+            }
+
             var debugUpdateAfterFrame: DebugSessionUpdate? = null
             val rawLandmarks =
                 result.landmarks().firstOrNull()
@@ -517,6 +545,9 @@ class WorkoutActivity :
         binding.overlayView.setDebugEnabled(settings.debugEnabled)
         binding.overlayView.setShowSkeleton(settings.showSkeleton)
         workoutVisible = true
+        preparationCountdown.start()
+        binding.correctionFeedback.text = getString(R.string.workout_get_ready, preparationCountdown.secondsRemaining)
+        binding.correctionFeedback.visibility = View.VISIBLE
         startDebugSessionIfEnabled()
         binding.workoutTimer.removeCallbacks(timerTick)
         timerTick.run()

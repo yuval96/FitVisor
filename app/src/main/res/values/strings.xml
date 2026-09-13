@@ -40,6 +40,7 @@
     <string name="workout_rep_count_zero">Reps: 0</string>
     <string name="cd_rep_count">%1$d repetitions completed</string>
     <string name="cd_rep_count_zero">No repetitions completed</string>
+    <string name="workout_get_ready">Get ready! Starting in %1$d…</string>
 
     <!-- Summary screen -->
     <string name="summary_title">Workout Summary</string>

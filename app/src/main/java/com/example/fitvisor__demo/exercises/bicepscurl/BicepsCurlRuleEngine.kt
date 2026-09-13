@@ -17,6 +17,12 @@ import com.example.fitvisor__demo.utils.ConsecutiveGate
  * another repetition can be counted. Torso and upper-arm-swing violations are
  * latched for the duration of the repetition.
  *
+ * The four cycle-defining elbow-angle thresholds are each debounced
+ * ([ConsecutiveGate], 2 consecutive frames): a single noisy reading right at
+ * a boundary can otherwise arm a phantom repetition and immediately fail it,
+ * or flip phases spuriously -- read together as a burst of unearned
+ * "incorrect rep" events with no real movement behind them.
+ *
  * Inputs per frame (all in degrees):
  *  - [elbowAngle]         shoulder-elbow-wrist.
  *  - [torsoVerticalAngle] torso deviation from vertical (0..90).
@@ -67,6 +73,12 @@ class BicepsCurlRuleEngine {
     private val torsoGate = ConsecutiveGate()
     private val upperArmGate = ConsecutiveGate()
 
+    /** Debounces the four cycle-defining elbow-angle thresholds; see class doc. */
+    private val repStartGate = ConsecutiveGate()
+    private val upGate = ConsecutiveGate()
+    private val lowGate = ConsecutiveGate()
+    private val upExitGate = ConsecutiveGate()
+
     private val errors = linkedSetOf<RepError>()
     private val frameRecorder = RepFrameRecorder()
 
@@ -96,8 +108,13 @@ class BicepsCurlRuleEngine {
         val torsoTripped = torsoGate.update(torsoIssue)
         val upperArmTripped = upperArmGate.update(upperArmIssue)
 
+        val stableRepStart = repStartGate.update(!elbowAngle.isNaN() && elbowAngle < REP_START_ELBOW)
+        val stableUp = upGate.update(!elbowAngle.isNaN() && elbowAngle <= UP_ELBOW_MAX)
+        val stableLow = lowGate.update(!elbowAngle.isNaN() && elbowAngle >= LOW_ELBOW_MIN)
+        val stableUpExit = upExitGate.update(!elbowAngle.isNaN() && elbowAngle > UP_EXIT_ELBOW)
+
         // Rep start: leaving the extended position.
-        if (currentState == State.LOW && elbowAngle < REP_START_ELBOW) {
+        if (currentState == State.LOW && stableRepStart) {
             startRep()
         }
 
@@ -129,7 +146,7 @@ class BicepsCurlRuleEngine {
 
             State.CURLING -> {
                 when {
-                    elbowAngle <= UP_ELBOW_MAX -> {
+                    stableUp -> {
                         // Reached the top: count the LOW -> UP repetition.
                         reachedUp = true
                         topElbow = elbowAngle
@@ -139,7 +156,7 @@ class BicepsCurlRuleEngine {
                             if (!isRepCorrect) latchedWarning ?: WARNING_CURL_HIGHER else null
                     }
 
-                    elbowAngle >= LOW_ELBOW_MIN -> {
+                    stableLow -> {
                         // Lowered again without curling high enough.
                         errors.add(RepError.INCOMPLETE_CURL)
                         isRepCompleted = true
@@ -151,11 +168,11 @@ class BicepsCurlRuleEngine {
             }
 
             State.UP -> {
-                if (elbowAngle > UP_EXIT_ELBOW) currentState = State.LOWERING
+                if (stableUpExit) currentState = State.LOWERING
             }
 
             State.LOWERING -> {
-                if (elbowAngle >= LOW_ELBOW_MIN) currentState = State.LOW
+                if (stableLow) currentState = State.LOW
             }
         }
 
@@ -221,6 +238,9 @@ class BicepsCurlRuleEngine {
         errors.clear()
         frameRecorder.reset()
         resetDebug()
+        upGate.reset()
+        lowGate.reset()
+        upExitGate.reset()
         // Torso and upper-arm are continuous posture measures; the gates are not
         // reset here so a violation spanning the low->curl transition latches
         // promptly. They are cleared when a repetition terminates.
@@ -234,6 +254,10 @@ class BicepsCurlRuleEngine {
         latchedWarning = null
         torsoGate.reset()
         upperArmGate.reset()
+        repStartGate.reset()
+        upGate.reset()
+        lowGate.reset()
+        upExitGate.reset()
     }
 
     private fun finishRepToLow() {
@@ -244,6 +268,10 @@ class BicepsCurlRuleEngine {
         latchedWarning = null
         torsoGate.reset()
         upperArmGate.reset()
+        repStartGate.reset()
+        upGate.reset()
+        lowGate.reset()
+        upExitGate.reset()
     }
 
     private fun resetDebug() {
@@ -262,6 +290,10 @@ class BicepsCurlRuleEngine {
         latchedWarning = null
         torsoGate.reset()
         upperArmGate.reset()
+        repStartGate.reset()
+        upGate.reset()
+        lowGate.reset()
+        upExitGate.reset()
         errors.clear()
         frameRecorder.reset()
         resetDebug()

@@ -51,14 +51,14 @@ import kotlin.math.abs
  *                                           tolerated). Only checked once a
  *                                           press is underway (elbow angle >
  *                                           [START_ELBOW_MAX]), not while racked.
- *  - [RepError.INSUFFICIENT_ELBOW_EXTENSION] a genuine press attempt (elbow
- *                                           angle cleared [PRESS_ATTEMPT_MIN_ELBOW])
- *                                           returns to START without ever
- *                                           reaching lockout. Small jitter
- *                                           around the START boundary that
- *                                           never clears that threshold is
- *                                           still silently discarded, not
- *                                           scored.
+ *  - [RepError.INSUFFICIENT_ELBOW_EXTENSION] a genuine press attempt (PRESSING
+ *                                           sustained for [PRESSING_SUSTAIN_FRAMES]
+ *                                           consecutive frames) returns to
+ *                                           START without ever reaching
+ *                                           lockout. A single-frame blip
+ *                                           crossing [START_ELBOW_MAX] that
+ *                                           never sustains is still silently
+ *                                           discarded, not scored.
  *
  * A completed repetition is correct iff none of the above faults were raised
  * during it. [lastFailingRule] and [activeErrors] are exposed for temporary
@@ -102,11 +102,16 @@ class ShoulderPressRuleEngine {
         private const val ELBOW_ASYMMETRY_VIOLATION_MIN = 25.0
         private const val ASYMMETRY_CONSEC_FRAMES = 3
 
-        // A press must clear this elbow angle -- comfortably past
-        // START_ELBOW_MAX but short of TOP_ELBOW_MIN -- before a return to
-        // START without lockout is scored as a fault rather than treated as
-        // harmless jitter around the START boundary.
-        private const val PRESS_ATTEMPT_MIN_ELBOW = 145.0
+        // A press attempt must sustain PRESSING for this many consecutive
+        // frames before a return to START without lockout is scored as a
+        // fault rather than treated as harmless jitter right at the START
+        // boundary. The fastest possible "stable return to START" from
+        // PRESSING already takes 3 total PRESSING-state frames (entry frame
+        // + the 2 consecutive frames startPoseGate itself needs) -- setting
+        // this to 3 exactly filters that absolute-minimum bounce, while
+        // anything held even one frame longer (i.e. any real, if brief,
+        // press) still gets scored.
+        private const val PRESSING_SUSTAIN_FRAMES = 3
 
         private const val WARNING_TORSO = "Keep your torso upright"
         private const val WARNING_ELBOWS_HEIGHT = "Bring elbows to shoulder height"
@@ -147,6 +152,14 @@ class ShoulderPressRuleEngine {
     private val topPoseGate = ConsecutiveGate()
     private val armsVerticalGate = ConsecutiveGate(ARMS_VERTICAL_CONSEC_FRAMES)
     private val asymmetryGate = ConsecutiveGate(ASYMMETRY_CONSEC_FRAMES)
+
+    /**
+     * How many consecutive frames [currentState] has been [State.PRESSING].
+     * Used only to tell a genuine (if shallow) press attempt apart from a
+     * single noisy frame crossing [START_ELBOW_MAX] while otherwise racked --
+     * the state machine never consults it.
+     */
+    private val pressingGate = ConsecutiveGate(PRESSING_SUSTAIN_FRAMES)
 
     private val errors = linkedSetOf<RepError>()
     private val frameRecorder = RepFrameRecorder()
@@ -277,6 +290,11 @@ class ShoulderPressRuleEngine {
             }
         }
 
+        // Sustained-PRESSING signal for the "abandoned press" check below,
+        // read using the state as of the *start* of this frame (before any
+        // transition below takes effect) -- see pressingGate's doc.
+        val pressingSustained = pressingGate.update(currentState == State.PRESSING)
+
         when (currentState) {
             State.START -> {
                 if (repActive && stableTop) {
@@ -297,12 +315,11 @@ class ShoulderPressRuleEngine {
                     }
                     stableStart -> {
                         // Returned to START without ever reaching lockout.
-                        // Only score this as a faulted repetition if a real
-                        // press was underway (elbow cleared
-                        // PRESS_ATTEMPT_MIN_ELBOW); otherwise it's jitter
-                        // around the START boundary and stays uncounted, as
-                        // before.
-                        if (!topReached && maxElbow >= PRESS_ATTEMPT_MIN_ELBOW) {
+                        // Only score this as a faulted repetition if PRESSING
+                        // was actually sustained for a couple of frames;
+                        // otherwise it's a single-frame blip crossing
+                        // START_ELBOW_MAX and stays uncounted, as before.
+                        if (!topReached && pressingSustained) {
                             errors.add(RepError.INSUFFICIENT_ELBOW_EXTENSION)
                             isRepCompleted = true
                             isRepCorrect = errors.isEmpty()
@@ -440,6 +457,7 @@ class ShoulderPressRuleEngine {
         topPoseGate.reset()
         armsVerticalGate.reset()
         asymmetryGate.reset()
+        pressingGate.reset()
         errors.clear()
         frameRecorder.reset()
         resetDebug()
@@ -470,6 +488,7 @@ class ShoulderPressRuleEngine {
         topPoseGate.reset()
         armsVerticalGate.reset()
         asymmetryGate.reset()
+        pressingGate.reset()
         errors.clear()
         frameRecorder.reset()
         resetDebug()

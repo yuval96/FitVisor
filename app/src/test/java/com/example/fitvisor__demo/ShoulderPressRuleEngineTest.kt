@@ -296,6 +296,7 @@ class ShoulderPressRuleEngineTest {
     fun clearPressAttempt_neverReachingTop_countsOneIncorrect() {
         establishStart()
         feed(147.0, elbowShoulderVertical = -0.15) // clear press progress, short of the 150 top
+        feed(147.0, elbowShoulderVertical = -0.15) // held for a frame -> sustains PRESSING past the bare minimum
         feed(100.0, elbowShoulderVertical = 0.0)
         val end = feed(100.0, elbowShoulderVertical = 0.0) // stable start -> scores the attempt
 
@@ -307,6 +308,12 @@ class ShoulderPressRuleEngineTest {
 
     @Test
     fun tinyJitterNearStart_doesNotCountAsIncorrect() {
+        // The fastest possible PRESSING->START round trip: a single frame
+        // crossing the START boundary, immediately followed by the 2
+        // consecutive frames startPoseGate itself needs to call it a stable
+        // return. This bare minimum must never be scored as a fault -- only
+        // an attempt held for at least one frame longer should be (see
+        // clearPressAttempt_neverReachingTop_countsOneIncorrect).
         establishStart()
         feed(138.0, elbowShoulderVertical = -0.05) // barely past START, well short of a real press
         feed(100.0, elbowShoulderVertical = 0.0)

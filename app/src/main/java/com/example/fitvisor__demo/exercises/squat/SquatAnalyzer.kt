@@ -10,6 +10,19 @@ import com.example.fitvisor__demo.pose.SideSelector
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
 /**
+ * Per-frame kinematic output of the squat's knee-over-toe check, for whichever
+ * leg the analyzer's shared [SideViewAnalyzer.sideSelector] currently has
+ * chosen. [confidence] is the minimum landmark confidence
+ * (knee/ankle/foot-index) for that leg.
+ */
+data class KneeOverToeMetrics(
+    val legIsLeft: Boolean,
+    val confidence: Float,
+    val ankleAngle: Double,
+    val normalizedKneeToeOffset: Double
+)
+
+/**
  * Side-view squat analyzer. Preserves the original squat metrics: knee angle
  * (hip-knee-ankle) and torso inclination (shoulder-hip vs vertical). The 2D
  * knee-alignment rule stays disabled, as in the original implementation.
@@ -24,18 +37,23 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * 3D version is far less sensitive to that.
  *
  * Also computes the knee-over-toe check's kinematic inputs (ankle angle and
- * normalized knee-to-toe offset) for whichever leg [kneeOverToeLegTracker]
- * currently has locked in — independent of [useLeft] above, since it only
- * needs knee/ankle/foot-index confidence, not the shoulder/hip/knee/ankle set
- * used for the primary knee/torso angles. Same 3D-preferred, 2D-fallback
- * pattern as the primary angles.
+ * normalized knee-to-toe offset) for the *same* leg [useLeft] chose for the
+ * primary knee/torso angles above -- there used to be a second, independent
+ * leg-selection tracker here (confidence over just knee/ankle/foot-index,
+ * re-picked and re-locked separately from the primary side), which could
+ * silently disagree with [SideViewAnalyzer.sideSelector] within the same
+ * repetition (e.g. depth measured on the left leg, knee-over-toe evaluated
+ * on the right). Now there is exactly one leg identity per frame; a
+ * knee-over-toe reading is only ever null when that same leg's
+ * knee/ankle/foot-index specifically aren't confident enough this frame, not
+ * because a different tracker chose a different leg. Same 3D-preferred, 2D-
+ * fallback pattern as the primary angles.
  */
 class SquatAnalyzer(
     poseQualityEnabled: () -> Boolean = { false }
 ) : SideViewAnalyzer(poseQualityEnabled) {
 
     private val engine = SquatRuleEngine()
-    private val kneeOverToeLegTracker = KneeOverToeLegTracker()
 
     override fun leftLandmarks(landmarks: List<NormalizedLandmark>) = listOf(
         landmarks[PoseLandmarkIndices.L_SH],
@@ -75,7 +93,7 @@ class SquatAnalyzer(
         // Knee alignment rule intentionally disabled (2D was unreliable).
         val kneeMisaligned = false
 
-        val kneeOverToe = computeKneeOverToeMetrics(landmarks, imageWidth, imageHeight)
+        val kneeOverToe = computeKneeOverToeMetrics(useLeft, landmarks, imageWidth, imageHeight)
         val result = engine.processFrame(kneeAngle, torsoAngle, kneeMisaligned, kneeOverToe)
 
         val metrics = OverlayMetrics(
@@ -105,40 +123,29 @@ class SquatAnalyzer(
     }
 
     /**
-     * Picks the more reliable leg (min confidence across knee/ankle/foot-index,
-     * locked per-repetition by [kneeOverToeLegTracker]) and computes the ankle
-     * angle + normalized knee-to-toe offset for it. Returns null when neither
-     * leg currently meets the confidence threshold — callers must treat that
-     * as "unknown", not as a technique failure.
+     * Computes knee-over-toe's ankle angle + normalized knee-to-toe offset
+     * for the same leg [useLeft] the primary knee/torso angles use. Returns
+     * null when that leg's knee/ankle/foot-index aren't confident enough
+     * this frame — callers must treat that as "unknown", not as a technique
+     * failure.
      */
     private fun computeKneeOverToeMetrics(
+        useLeft: Boolean,
         landmarks: List<NormalizedLandmark>,
         imageWidth: Int,
         imageHeight: Int
     ): KneeOverToeMetrics? {
-        val leftKnee = landmarks[PoseLandmarkIndices.L_KNEE]
-        val leftAnkle = landmarks[PoseLandmarkIndices.L_ANKLE]
-        val leftFootIndex = landmarks[PoseLandmarkIndices.L_FOOT_INDEX]
-        val rightKnee = landmarks[PoseLandmarkIndices.R_KNEE]
-        val rightAnkle = landmarks[PoseLandmarkIndices.R_ANKLE]
-        val rightFootIndex = landmarks[PoseLandmarkIndices.R_FOOT_INDEX]
-
-        val leftScore = LandmarkConfidence.minOfAll(leftKnee, leftAnkle, leftFootIndex)
-        val rightScore = LandmarkConfidence.minOfAll(rightKnee, rightAnkle, rightFootIndex)
-
-        val isStanding = engine.phaseName == SquatRuleEngine.State.UP.name
-        val side = kneeOverToeLegTracker.update(leftScore, rightScore, isStanding) ?: return null
-
-        val useLeftLeg = side == SideSelector.Side.LEFT
-        val knee = if (useLeftLeg) leftKnee else rightKnee
-        val ankle = if (useLeftLeg) leftAnkle else rightAnkle
-        val footIndex = if (useLeftLeg) leftFootIndex else rightFootIndex
-        val confidence = if (useLeftLeg) leftScore else rightScore
-
-        val kneeIndex = if (useLeftLeg) PoseLandmarkIndices.L_KNEE else PoseLandmarkIndices.R_KNEE
-        val ankleIndex = if (useLeftLeg) PoseLandmarkIndices.L_ANKLE else PoseLandmarkIndices.R_ANKLE
+        val kneeIndex = if (useLeft) PoseLandmarkIndices.L_KNEE else PoseLandmarkIndices.R_KNEE
+        val ankleIndex = if (useLeft) PoseLandmarkIndices.L_ANKLE else PoseLandmarkIndices.R_ANKLE
         val footIndexIndex =
-            if (useLeftLeg) PoseLandmarkIndices.L_FOOT_INDEX else PoseLandmarkIndices.R_FOOT_INDEX
+            if (useLeft) PoseLandmarkIndices.L_FOOT_INDEX else PoseLandmarkIndices.R_FOOT_INDEX
+
+        val knee = landmarks[kneeIndex]
+        val ankle = landmarks[ankleIndex]
+        val footIndex = landmarks[footIndexIndex]
+
+        val confidence = LandmarkConfidence.minOfAll(knee, ankle, footIndex)
+        if (confidence < SideSelector.MIN_SIDE_CONFIDENCE) return null
 
         val ankleAngle = worldAnkleAngle(kneeIndex, ankleIndex, footIndexIndex)
             ?: KinematicCalculator.calculateAngle(knee, ankle, footIndex, imageWidth, imageHeight)
@@ -146,7 +153,7 @@ class SquatAnalyzer(
             ?: KinematicCalculator.normalizedKneeToeOffset(knee, ankle, footIndex, imageWidth, imageHeight)
 
         return KneeOverToeMetrics(
-            legIsLeft = useLeftLeg,
+            legIsLeft = useLeft,
             confidence = confidence,
             ankleAngle = ankleAngle,
             normalizedKneeToeOffset = kneeToeOffset
@@ -171,6 +178,5 @@ class SquatAnalyzer(
 
     override fun resetEngine() {
         engine.reset()
-        kneeOverToeLegTracker.reset()
     }
 }

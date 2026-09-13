@@ -17,6 +17,12 @@ import kotlin.math.abs
  * required depth still completes, but as an incorrect repetition. Body-linearity
  * violations are latched for the whole repetition.
  *
+ * The four cycle-defining elbow-angle thresholds are each debounced
+ * ([ConsecutiveGate], 2 consecutive frames): a single noisy reading right at
+ * a boundary can otherwise arm a phantom repetition and immediately fail it,
+ * or flip phases spuriously -- read together as a burst of unearned
+ * "incorrect rep" events with no real movement behind them.
+ *
  * Inputs per frame (all in degrees):
  *  - [elbowAngle]      wrist-elbow-shoulder.
  *  - [bodyLineAngle]   shoulder-hip-ankle (~180 when the body is straight).
@@ -63,6 +69,12 @@ class PushUpRuleEngine {
     private val bodyLineGate = ConsecutiveGate()
     private val horizontalGate = ConsecutiveGate()
 
+    /** Debounces the four cycle-defining elbow-angle thresholds; see class doc. */
+    private val repStartGate = ConsecutiveGate()
+    private val bottomGate = ConsecutiveGate()
+    private val topGate = ConsecutiveGate()
+    private val bottomExitGate = ConsecutiveGate()
+
     private val errors = linkedSetOf<RepError>()
     private val frameRecorder = RepFrameRecorder()
 
@@ -87,8 +99,13 @@ class PushUpRuleEngine {
         val bodyLineIssue =
             bodyLineAngle < BODY_LINE_MIN || bodyLineAngle > BODY_LINE_MAX
 
+        val stableRepStart = repStartGate.update(!elbowAngle.isNaN() && elbowAngle < REP_START_THRESHOLD)
+        val stableBottom = bottomGate.update(!elbowAngle.isNaN() && elbowAngle <= BOTTOM_ELBOW_THRESHOLD)
+        val stableTop = topGate.update(!elbowAngle.isNaN() && elbowAngle >= TOP_ELBOW_THRESHOLD)
+        val stableBottomExit = bottomExitGate.update(!elbowAngle.isNaN() && elbowAngle >= BOTTOM_EXIT_THRESHOLD)
+
         // Rep start: leaving the top position.
-        if (currentState == State.TOP && elbowAngle < REP_START_THRESHOLD) {
+        if (currentState == State.TOP && stableRepStart) {
             startRep()
         }
 
@@ -124,10 +141,10 @@ class PushUpRuleEngine {
             State.TOP -> Unit
 
             State.DESCENDING -> {
-                if (elbowAngle <= BOTTOM_ELBOW_THRESHOLD) {
+                if (stableBottom) {
                     reachedBottom = true
                     currentState = State.BOTTOM
-                } else if (elbowAngle >= TOP_ELBOW_THRESHOLD) {
+                } else if (stableTop) {
                     // Returned to the top without ever reaching depth.
                     errors.add(RepError.INSUFFICIENT_DEPTH)
                     isRepCompleted = true
@@ -137,18 +154,18 @@ class PushUpRuleEngine {
             }
 
             State.BOTTOM -> {
-                if (elbowAngle >= BOTTOM_EXIT_THRESHOLD) {
+                if (stableBottomExit) {
                     currentState = State.ASCENDING
                 }
             }
 
             State.ASCENDING -> {
-                if (elbowAngle >= TOP_ELBOW_THRESHOLD) {
+                if (stableTop) {
                     isRepCompleted = true
                     isRepCorrect = reachedBottom && techniqueValid
                     resultWarning =
                         if (!isRepCorrect) latchedWarning ?: WARNING_GO_LOWER else null
-                } else if (elbowAngle <= BOTTOM_ELBOW_THRESHOLD) {
+                } else if (stableBottom) {
                     currentState = State.BOTTOM
                 }
             }
@@ -222,6 +239,9 @@ class PushUpRuleEngine {
         latchedWarning = null
         bodyLineGate.reset()
         horizontalGate.reset()
+        bottomGate.reset()
+        topGate.reset()
+        bottomExitGate.reset()
         errors.clear()
         frameRecorder.reset()
         resetDebug()
@@ -235,6 +255,10 @@ class PushUpRuleEngine {
         latchedWarning = null
         bodyLineGate.reset()
         horizontalGate.reset()
+        repStartGate.reset()
+        bottomGate.reset()
+        topGate.reset()
+        bottomExitGate.reset()
     }
 
     private fun resetDebug() {
