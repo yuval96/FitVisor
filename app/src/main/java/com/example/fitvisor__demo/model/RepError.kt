@@ -14,10 +14,14 @@ package com.example.fitvisor__demo.model
  *  - Push-up top-orientation is not implemented -> no INVALID_TOP_ORIENTATION.
  *  - Biceps-curl lowering is not validated (the rep counts on the way up) -> no
  *    INCOMPLETE_LOWERING.
+ *  - Shoulder-press START-position problems (wrong elbow height, arms not bent
+ *    enough) are intentionally only a state-machine gate, not a scored fault:
+ *    INVALID_START_POSITION, ELBOW_NOT_AT_SHOULDER_HEIGHT and
+ *    INVALID_UPPER_ARM_ANGLE are declared for future use but never raised.
  */
 enum class RepError(val message: String) {
 
-    // Squat + Push-up (and shoulder press "did not extend").
+    // Squat + Push-up.
     INSUFFICIENT_DEPTH("Did not reach sufficient depth"),
 
     // Squat / Shoulder press torso lean.
@@ -34,6 +38,7 @@ enum class RepError(val message: String) {
     INVALID_UPPER_ARM_ANGLE("Upper arms were at the wrong angle"),
     ARMS_NOT_VERTICAL("Arms were not pressed vertically"),
     INSUFFICIENT_ELBOW_EXTENSION("Elbows were not fully extended"),
+    ASYMMETRIC_ARM_POSITION("Arms were not raised symmetrically"),
 
     // Biceps curl.
     INCOMPLETE_CURL("Did not curl high enough"),

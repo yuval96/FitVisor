@@ -17,12 +17,18 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
 /**
  * Front-view shoulder-press analyzer. Prefers both arms when both are reliable
- * (metrics are averaged), otherwise falls back to the single reliable arm.
- * The rule engine consumes elbow angle (shoulder-elbow-wrist), torso inclination,
- * the normalized elbow->shoulder vertical difference (for "elbows at shoulder
- * height") and the torso length as a body-relative scale for that height
- * tolerance. Upper-arm and shoulder->wrist angles are still computed for the
- * overlay and Logcat debug, but are no longer rep or correctness criteria.
+ * (metrics are averaged for the state machine), otherwise falls back to the
+ * single reliable arm. The rule engine consumes the averaged elbow angle
+ * (shoulder-elbow-wrist), torso inclination, the normalized elbow->shoulder
+ * vertical difference (for "elbows at shoulder height") and the torso length
+ * as a body-relative scale for that height tolerance -- these drive the
+ * START/TOP state machine only.
+ *
+ * The *per-side* elbow angle and shoulder->wrist vertical angle are also
+ * forwarded to the engine (not averaged) so it can run the arm-verticality
+ * and left/right symmetry technique checks independently of state detection.
+ * Upper-arm-to-torso angle is still computed for the overlay/debug only and
+ * is deliberately not a correctness criterion (see the engine's doc).
  *
  * When [debugEnabled] is on, this analyzer also emits
  * temporary Logcat debug (per-side angles, phase, failing rule and per-rep
@@ -126,12 +132,16 @@ class ShoulderPressAnalyzer(
             elbowAngle = elbowAngle,
             torsoVerticalAngle = torsoAngle,
             elbowShoulderVertical = elbowShoulderVerticalValue,
-            bodyScale = bodyScaleValue
+            bodyScale = bodyScaleValue,
+            leftElbowAngle = leftMetrics?.elbow ?: Double.NaN,
+            rightElbowAngle = rightMetrics?.elbow ?: Double.NaN,
+            leftArmVertical = leftMetrics?.shoulderWristVertical ?: Double.NaN,
+            rightArmVertical = rightMetrics?.shoulderWristVertical ?: Double.NaN
         )
         lastPhase = result.phaseName
 
         if (diagnosticsEnabled) {
-            logDebug(leftMetrics, rightMetrics, result)
+            logDebug(leftMetrics, rightMetrics, elbowAngle, result)
         }
 
         val metrics = OverlayMetrics(
@@ -182,19 +192,25 @@ class ShoulderPressAnalyzer(
     private fun logDebug(
         leftMetrics: ArmMetrics?,
         rightMetrics: ArmMetrics?,
+        avgElbowAngle: Double,
         result: ExerciseAnalysisResult
     ) {
         leftMetrics?.let { leftRange.add(it) }
         rightMetrics?.let { rightRange.add(it) }
 
+        val asymmetry = if (leftMetrics != null && rightMetrics != null) {
+            fmtDbg(kotlin.math.abs(leftMetrics.elbow - rightMetrics.elbow))
+        } else "-"
+
         Log.d(
             DEBUG_TAG,
             "phase=${result.phaseName} " +
-                "elbow L/R=${fmtDbg(leftMetrics?.elbow)}/${fmtDbg(rightMetrics?.elbow)} " +
-                "upperArm L/R=${fmtDbg(leftMetrics?.upperArm)}/${fmtDbg(rightMetrics?.upperArm)} " +
-                "shWristVert L/R=${fmtDbg(leftMetrics?.shoulderWristVertical)}/${fmtDbg(rightMetrics?.shoulderWristVertical)} " +
-                "torso L/R=${fmtDbg(leftMetrics?.torso)}/${fmtDbg(rightMetrics?.torso)} " +
+                "elbow L/R/avg=${fmtDbg(leftMetrics?.elbow)}/${fmtDbg(rightMetrics?.elbow)}/${fmtDbg(avgElbowAngle)} " +
+                "armVert L/R=${fmtDbg(leftMetrics?.shoulderWristVertical)}/${fmtDbg(rightMetrics?.shoulderWristVertical)} " +
+                "torso=${fmtDbg(leftMetrics?.torso ?: rightMetrics?.torso)} " +
+                "asymmetry=$asymmetry " +
                 "elbShldrVert L/R=${fmtDbg3(leftMetrics?.elbowShoulderVertical)}/${fmtDbg3(rightMetrics?.elbowShoulderVertical)} " +
+                "activeErrors=${engine.activeErrors.map { it.name }} " +
                 "fail=[${engine.lastFailingRule}]"
         )
 

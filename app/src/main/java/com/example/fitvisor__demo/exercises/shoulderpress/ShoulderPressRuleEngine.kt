@@ -28,25 +28,33 @@ import kotlin.math.abs
  *    distance, so it holds across camera distances and resolutions.
  *  - TOP_REACHED is detected purely from elbow extension (`elbowAngle >= 150`).
  *
- * Repetition-state detection (above) is kept separate from technique validation.
- * The only retained posture check is torso uprightness, which is applied with a
- * relaxed, debounced threshold and only affects whether a *completed* rep is
- * marked correct -- it never blocks the state machine or the rep count.
+ * Repetition-*detection* (arming a rep, and knowing when one completes) is kept
+ * separate from *technique validation*. A START-position problem (wrong elbow
+ * height, arms not bent enough) only blocks a repetition from arming/completing
+ * -- it is never itself scored as an incorrect repetition; the user is simply
+ * guided back to a valid start. Once a repetition is armed, four independent,
+ * debounced technique checks can each attach a sticky fault that survives to
+ * the end of the repetition even if the user corrects before finishing:
  *
- * Inputs per frame:
- *  - [elbowAngle]            shoulder-elbow-wrist, degrees.
- *  - [torsoVerticalAngle]    torso deviation from vertical, degrees (0..90).
- *  - [elbowShoulderVertical] normalized signed vertical distance elbow->shoulder
- *                            (image Y, 0..1). ~0 means the elbow is at shoulder
- *                            height.
- *  - [bodyScale]             normalized torso length (|shoulder.y - hip.y|), used
- *                            to make the shoulder-height tolerance body-relative.
+ *  - [RepError.EXCESSIVE_TORSO_LEAN]        torso tilts > 15 deg from vertical.
+ *  - [RepError.ARMS_NOT_VERTICAL]           shoulder->wrist tilts > 30 deg from
+ *                                           vertical (20-30 deg is a tolerated
+ *                                           grey zone -- anatomy/camera noise).
+ *  - [RepError.ASYMMETRIC_ARM_POSITION]     left/right elbow angle differ by
+ *                                           more than 25 deg (20-25 deg
+ *                                           tolerated).
+ *  - [RepError.INSUFFICIENT_ELBOW_EXTENSION] a genuine press attempt (elbow
+ *                                           angle cleared [PRESS_ATTEMPT_MIN_ELBOW])
+ *                                           returns to START without ever
+ *                                           reaching lockout. Small jitter
+ *                                           around the START boundary that
+ *                                           never clears that threshold is
+ *                                           still silently discarded, not
+ *                                           scored.
  *
- * The previous strict rules -- a racked `upper arm / torso ~= low band`, a
- * `low elbow angle` band, and a `vertical press` angle at the top -- were the
- * source of false negatives on valid presses and have been removed as rep /
- * correctness criteria. [lastFailingRule] is exposed for temporary on-device
- * Logcat debugging; the state machine never consults it.
+ * A completed repetition is correct iff none of the above faults were raised
+ * during it. [lastFailingRule] and [activeErrors] are exposed for temporary
+ * on-device Logcat debugging; the state machine never consults them.
  */
 class ShoulderPressRuleEngine {
 
@@ -67,13 +75,32 @@ class ShoulderPressRuleEngine {
         // TOP_REACHED: elbows extended to (near) lockout.
         private const val TOP_ELBOW_MIN = 150.0
 
-        // Secondary form check only: torso must stay within this many degrees of
-        // vertical. Debounced by a ConsecutiveGate and deliberately relaxed -- it
-        // decides correct/incorrect for a completed rep, never the rep count.
+        // Torso must stay within this many degrees of vertical. Debounced by a
+        // ConsecutiveGate; deliberately relaxed.
         private const val TORSO_VERTICAL_LIMIT = 15.0
+
+        // Arm verticality (shoulder->wrist vs. vertical axis). <=20 deg is fine;
+        // 20-30 deg is a tolerated grey zone (anatomy / camera-angle noise, not
+        // scored); >30 deg is a real technique fault (pressing forward/outward).
+        private const val ARMS_VERTICAL_VIOLATION_MIN = 30.0
+        private const val ARMS_VERTICAL_CONSEC_FRAMES = 3
+
+        // Left/right elbow-angle symmetry. <=20 deg difference is fine, 20-25 is
+        // a tolerated grey zone, >25 deg is a real asymmetry fault.
+        private const val ELBOW_ASYMMETRY_VIOLATION_MIN = 25.0
+        private const val ASYMMETRY_CONSEC_FRAMES = 3
+
+        // A press must clear this elbow angle -- comfortably past
+        // START_ELBOW_MAX but short of TOP_ELBOW_MIN -- before a return to
+        // START without lockout is scored as a fault rather than treated as
+        // harmless jitter around the START boundary.
+        private const val PRESS_ATTEMPT_MIN_ELBOW = 145.0
 
         private const val WARNING_TORSO = "Keep your torso upright"
         private const val WARNING_ELBOWS_HEIGHT = "Bring elbows to shoulder height"
+        private const val WARNING_ARMS_VERTICAL = "Press arms straight overhead"
+        private const val WARNING_ASYMMETRY = "Keep both arms level"
+        private const val WARNING_INSUFFICIENT_EXTENSION = "Extend your arms fully overhead"
     }
 
     enum class State { START, PRESSING, TOP_REACHED, LOWERING }
@@ -86,7 +113,6 @@ class ShoulderPressRuleEngine {
     // rep if the session happens to begin with the arms already extended.
     private var sawStart = false
     private var topReached = false
-    private var torsoViolated = false
 
     /**
      * Temporary on-device debug: a human-readable description of the condition
@@ -96,9 +122,19 @@ class ShoulderPressRuleEngine {
     var lastFailingRule: String = "none"
         private set
 
+    /**
+     * Debug-only snapshot of the faults accumulated so far *during the
+     * in-progress* repetition (unlike [ExerciseAnalysisResult.errors], which is
+     * only populated on the completing frame). Read by [ShoulderPressAnalyzer]
+     * for Logcat only.
+     */
+    val activeErrors: Set<RepError> get() = errors.toSet()
+
     private val torsoGate = ConsecutiveGate()
     private val startPoseGate = ConsecutiveGate()
     private val topPoseGate = ConsecutiveGate()
+    private val armsVerticalGate = ConsecutiveGate(ARMS_VERTICAL_CONSEC_FRAMES)
+    private val asymmetryGate = ConsecutiveGate(ASYMMETRY_CONSEC_FRAMES)
 
     private val errors = linkedSetOf<RepError>()
     private val frameRecorder = RepFrameRecorder()
@@ -108,6 +144,8 @@ class ShoulderPressRuleEngine {
     private var maxElbow = Double.NaN
     private var topElbow = Double.NaN
     private var maxTorso = Double.NaN
+    private var maxArmVertical = Double.NaN
+    private var maxAsymmetry = Double.NaN
     // Elbow->shoulder vertical difference captured at the START of the rep.
     private var startElbowShoulder = Double.NaN
 
@@ -120,11 +158,32 @@ class ShoulderPressRuleEngine {
     var lastRepStartElbowShoulder: Double = Double.NaN
         private set
 
+    /**
+     * @param elbowAngle shoulder-elbow-wrist, degrees. Averaged across
+     *   whichever arm(s) are reliable -- still the basis for START/TOP
+     *   detection.
+     * @param torsoVerticalAngle torso deviation from vertical, degrees (0..90).
+     * @param elbowShoulderVertical normalized signed vertical distance
+     *   elbow->shoulder (image Y, 0..1). ~0 means the elbow is at shoulder
+     *   height.
+     * @param bodyScale normalized torso length (|shoulder.y - hip.y|), used to
+     *   make the shoulder-height tolerance body-relative.
+     * @param leftElbowAngle / [rightElbowAngle] per-side elbow angles, degrees.
+     *   NaN when that side isn't reliable this frame. Used only for the
+     *   left/right symmetry check.
+     * @param leftArmVertical / [rightArmVertical] per-side shoulder->wrist
+     *   deviation from vertical, degrees. NaN when that side isn't reliable
+     *   this frame. Used only for the arm-verticality check.
+     */
     fun processFrame(
         elbowAngle: Double,
         torsoVerticalAngle: Double,
         elbowShoulderVertical: Double,
-        bodyScale: Double
+        bodyScale: Double,
+        leftElbowAngle: Double = Double.NaN,
+        rightElbowAngle: Double = Double.NaN,
+        leftArmVertical: Double = Double.NaN,
+        rightArmVertical: Double = Double.NaN
     ): ExerciseAnalysisResult {
 
         var isRepCompleted = false
@@ -150,23 +209,42 @@ class ShoulderPressRuleEngine {
 
         val repActive = sawStart
 
-        // Torso posture (secondary form check only), debounced so a single jittery
-        // frame cannot fail a rep.
+        // --- Sticky technique checks -------------------------------------
+        // Each is debounced independently and, once tripped during an active
+        // repetition, stays attached to it (the `errors` set is only cleared
+        // in finishRep/reset) even if the user corrects before finishing.
+
         val torsoIssue =
             !torsoVerticalAngle.isNaN() && torsoVerticalAngle > TORSO_VERTICAL_LIMIT
         val torsoTripped = torsoGate.update(torsoIssue)
-        if (repActive && torsoTripped) {
-            torsoViolated = true
-            errors.add(RepError.EXCESSIVE_TORSO_LEAN)
-        }
+        if (repActive && torsoTripped) errors.add(RepError.EXCESSIVE_TORSO_LEAN)
+
+        // Most-deviated arm wins: a single arm pressing forward while the
+        // other stays vertical must still be caught.
+        val armVertical = maxKeepNaN(leftArmVertical, rightArmVertical)
+        val armsVerticalIssue =
+            !armVertical.isNaN() && armVertical > ARMS_VERTICAL_VIOLATION_MIN
+        val armsVerticalTripped = armsVerticalGate.update(armsVerticalIssue)
+        if (repActive && armsVerticalTripped) errors.add(RepError.ARMS_NOT_VERTICAL)
+
+        val asymmetry =
+            if (!leftElbowAngle.isNaN() && !rightElbowAngle.isNaN())
+                abs(leftElbowAngle - rightElbowAngle)
+            else Double.NaN
+        val asymmetryIssue =
+            !asymmetry.isNaN() && asymmetry > ELBOW_ASYMMETRY_VIOLATION_MIN
+        val asymmetryTripped = asymmetryGate.update(asymmetryIssue)
+        if (repActive && asymmetryTripped) errors.add(RepError.ASYMMETRIC_ARM_POSITION)
 
         if (repActive) {
-            accumulateDebug(elbowAngle, torsoVerticalAngle)
+            accumulateDebug(elbowAngle, torsoVerticalAngle, armVertical, asymmetry)
             frameRecorder.record(currentState.name) {
                 linkedMapOf(
                     "elbow" to elbowAngle,
                     "torso" to torsoVerticalAngle,
-                    "elbowShoulder" to elbowShoulderVertical
+                    "elbowShoulder" to elbowShoulderVertical,
+                    "armVertical" to armVertical,
+                    "asymmetry" to asymmetry
                 )
             }
         }
@@ -189,7 +267,21 @@ class ShoulderPressRuleEngine {
                         topReached = true
                         topElbow = elbowAngle
                     }
-                    stableStart -> currentState = State.START // incomplete attempt
+                    stableStart -> {
+                        // Returned to START without ever reaching lockout.
+                        // Only score this as a faulted repetition if a real
+                        // press was underway (elbow cleared
+                        // PRESS_ATTEMPT_MIN_ELBOW); otherwise it's jitter
+                        // around the START boundary and stays uncounted, as
+                        // before.
+                        if (!topReached && maxElbow >= PRESS_ATTEMPT_MIN_ELBOW) {
+                            errors.add(RepError.INSUFFICIENT_ELBOW_EXTENSION)
+                            isRepCompleted = true
+                            isRepCorrect = errors.isEmpty()
+                            resultWarning = completionWarning()
+                        }
+                        currentState = State.START
+                    }
                 }
             }
 
@@ -197,8 +289,8 @@ class ShoulderPressRuleEngine {
                 when {
                     stableStart -> {
                         isRepCompleted = true
-                        isRepCorrect = !torsoViolated
-                        resultWarning = if (!isRepCorrect) WARNING_TORSO else null
+                        isRepCorrect = errors.isEmpty()
+                        resultWarning = completionWarning()
                     }
                     !topPose -> currentState = State.LOWERING
                 }
@@ -207,8 +299,8 @@ class ShoulderPressRuleEngine {
             State.LOWERING -> {
                 if (stableStart) {
                     isRepCompleted = true
-                    isRepCorrect = !torsoViolated
-                    resultWarning = if (!isRepCorrect) WARNING_TORSO else null
+                    isRepCorrect = errors.isEmpty()
+                    resultWarning = completionWarning()
                 } else if (stableTop) {
                     // The user raised the arms again before returning to START.
                     currentState = State.TOP_REACHED
@@ -220,6 +312,8 @@ class ShoulderPressRuleEngine {
         if (!isRepCompleted) {
             resultWarning = when {
                 repActive && torsoTripped -> WARNING_TORSO
+                repActive && armsVerticalTripped -> WARNING_ARMS_VERTICAL
+                repActive && asymmetryTripped -> WARNING_ASYMMETRY
                 currentState == State.START && !sawStart && !startPose ->
                     WARNING_ELBOWS_HEIGHT
                 else -> null
@@ -230,6 +324,10 @@ class ShoulderPressRuleEngine {
         lastFailingRule = when {
             repActive && torsoTripped ->
                 "torso lean: %.1f > %.1f".format(torsoVerticalAngle, TORSO_VERTICAL_LIMIT)
+            repActive && armsVerticalTripped ->
+                "arms not vertical: %.1f > %.1f".format(armVertical, ARMS_VERTICAL_VIOLATION_MIN)
+            repActive && asymmetryTripped ->
+                "asymmetry: %.1f > %.1f".format(asymmetry, ELBOW_ASYMMETRY_VIOLATION_MIN)
             currentState == State.START && !startPose ->
                 "start not reached: elbow=%.1f (max %.1f), height |%.3f| (max %.3f)".format(
                     elbowAngle, START_ELBOW_MAX, elbowShoulderVertical, heightTol)
@@ -258,6 +356,16 @@ class ShoulderPressRuleEngine {
         )
     }
 
+    /** Highest-priority explanation for a just-completed, incorrect repetition. */
+    private fun completionWarning(): String? = when {
+        errors.isEmpty() -> null
+        RepError.EXCESSIVE_TORSO_LEAN in errors -> WARNING_TORSO
+        RepError.ARMS_NOT_VERTICAL in errors -> WARNING_ARMS_VERTICAL
+        RepError.ASYMMETRIC_ARM_POSITION in errors -> WARNING_ASYMMETRY
+        RepError.INSUFFICIENT_ELBOW_EXTENSION in errors -> WARNING_INSUFFICIENT_EXTENSION
+        else -> null
+    }
+
     /** Body-relative shoulder-height tolerance, floored for small/distant subjects. */
     private fun startHeightTolerance(bodyScale: Double): Double {
         val ratioTol =
@@ -266,10 +374,17 @@ class ShoulderPressRuleEngine {
         return maxOf(ratioTol, START_HEIGHT_TOL_FLOOR)
     }
 
-    private fun accumulateDebug(elbowAngle: Double, torsoVerticalAngle: Double) {
+    private fun accumulateDebug(
+        elbowAngle: Double,
+        torsoVerticalAngle: Double,
+        armVertical: Double,
+        asymmetry: Double
+    ) {
         minElbow = minKeepNaN(minElbow, elbowAngle)
         maxElbow = maxKeepNaN(maxElbow, elbowAngle)
         maxTorso = maxKeepNaN(maxTorso, torsoVerticalAngle)
+        maxArmVertical = maxKeepNaN(maxArmVertical, armVertical)
+        maxAsymmetry = maxKeepNaN(maxAsymmetry, asymmetry)
     }
 
     private fun buildDebugMetrics(): RepDebugMetrics = RepDebugMetrics(
@@ -277,7 +392,9 @@ class ShoulderPressRuleEngine {
             "minElbowAngle" to minElbow,
             "maxElbowAngle" to maxElbow,
             "topElbowAngle" to topElbow,
-            "maxTorsoAngle" to maxTorso
+            "maxTorsoAngle" to maxTorso,
+            "maxArmVerticalAngle" to maxArmVertical,
+            "maxAsymmetry" to maxAsymmetry
         ),
         frameTrace = frameRecorder.snapshot(),
         // Non-angle state; the precise start elbow->shoulder difference is
@@ -293,10 +410,11 @@ class ShoulderPressRuleEngine {
         torsoGate.reset()
         startPoseGate.reset()
         topPoseGate.reset()
+        armsVerticalGate.reset()
+        asymmetryGate.reset()
         errors.clear()
         frameRecorder.reset()
         resetDebug()
-        torsoViolated = false
         topReached = false
         // The completing frame is itself a valid START for the next rep, so the
         // next rep is armed immediately from this shoulder-height reading.
@@ -309,6 +427,8 @@ class ShoulderPressRuleEngine {
         maxElbow = Double.NaN
         topElbow = Double.NaN
         maxTorso = Double.NaN
+        maxArmVertical = Double.NaN
+        maxAsymmetry = Double.NaN
         // startElbowShoulder is (re)assigned by finishRep from the completing frame.
     }
 
@@ -316,11 +436,12 @@ class ShoulderPressRuleEngine {
         currentState = State.START
         sawStart = false
         topReached = false
-        torsoViolated = false
         lastFailingRule = "none"
         torsoGate.reset()
         startPoseGate.reset()
         topPoseGate.reset()
+        armsVerticalGate.reset()
+        asymmetryGate.reset()
         errors.clear()
         frameRecorder.reset()
         resetDebug()

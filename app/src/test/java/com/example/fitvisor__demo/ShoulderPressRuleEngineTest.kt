@@ -28,12 +28,20 @@ class ShoulderPressRuleEngineTest {
         elbow: Double,
         torso: Double = 3.0,
         elbowShoulderVertical: Double = 0.0,
-        bodyScale: Double = 0.4
+        bodyScale: Double = 0.4,
+        leftElbow: Double = Double.NaN,
+        rightElbow: Double = Double.NaN,
+        leftArmVertical: Double = Double.NaN,
+        rightArmVertical: Double = Double.NaN
     ) = engine.processFrame(
         elbowAngle = elbow,
         torsoVerticalAngle = torso,
         elbowShoulderVertical = elbowShoulderVertical,
-        bodyScale = bodyScale
+        bodyScale = bodyScale,
+        leftElbowAngle = leftElbow,
+        rightElbowAngle = rightElbow,
+        leftArmVertical = leftArmVertical,
+        rightArmVertical = rightArmVertical
     )
 
     private fun establishStart() {
@@ -159,5 +167,117 @@ class ShoulderPressRuleEngineTest {
         val second = returnToStart()
         assertTrue(second.isRepCompleted)
         assertTrue(second.isRepCorrect)
+    }
+
+    // --- Arm verticality (shoulder->wrist vs. vertical) ------------------
+
+    @Test
+    fun armsClearlyNotVertical_duringRep_countsOneIncorrect() {
+        establishStart()
+        // Pressing forward: elbows reach lockout, but the shoulder->wrist
+        // vector stays well past the 30-degree violation threshold.
+        repeat(3) {
+            feed(160.0, elbowShoulderVertical = -0.30, leftArmVertical = 40.0, rightArmVertical = 38.0)
+        }
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertTrue(end.isRepCompleted)
+        assertFalse(end.isRepCorrect)
+        assertTrue(end.errors.contains(RepError.ARMS_NOT_VERTICAL))
+    }
+
+    @Test
+    fun armsInGreyZone_neverInvalidatesRep() {
+        establishStart()
+        // 20-30 degrees is a tolerated grey zone, not a violation.
+        repeat(5) {
+            feed(160.0, elbowShoulderVertical = -0.30, leftArmVertical = 25.0, rightArmVertical = 24.0)
+        }
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertFalse(end.errors.contains(RepError.ARMS_NOT_VERTICAL))
+    }
+
+    @Test
+    fun singleFrameArmsNotVertical_doesNotInvalidate() {
+        establishStart()
+        feed(160.0, elbowShoulderVertical = -0.30, leftArmVertical = 45.0, rightArmVertical = 45.0)
+        feed(160.0, elbowShoulderVertical = -0.30) // back to vertical (no data -> no issue), gate resets
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+    }
+
+    // --- Left/right symmetry ----------------------------------------------
+
+    @Test
+    fun asymmetricArms_duringRep_countsOneIncorrect() {
+        establishStart()
+        repeat(3) {
+            feed(160.0, elbowShoulderVertical = -0.30, leftElbow = 170.0, rightElbow = 130.0) // diff 40
+        }
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertTrue(end.isRepCompleted)
+        assertFalse(end.isRepCorrect)
+        assertTrue(end.errors.contains(RepError.ASYMMETRIC_ARM_POSITION))
+    }
+
+    @Test
+    fun briefSingleFrameAsymmetry_doesNotInvalidate() {
+        establishStart()
+        feed(155.0, elbowShoulderVertical = -0.30, leftElbow = 170.0, rightElbow = 120.0) // 1 noisy frame
+        reachTop() // no per-side data on these frames -> the gate resets
+        val end = returnToStart()
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertFalse(end.errors.contains(RepError.ASYMMETRIC_ARM_POSITION))
+    }
+
+    @Test
+    fun mildNaturalAsymmetry_withinTolerance_staysCorrect() {
+        establishStart()
+        repeat(4) {
+            feed(160.0, elbowShoulderVertical = -0.30, leftElbow = 158.0, rightElbow = 150.0) // diff 8
+        }
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+    }
+
+    // --- Insufficient elbow extension --------------------------------------
+
+    @Test
+    fun clearPressAttempt_neverReachingTop_countsOneIncorrect() {
+        establishStart()
+        feed(147.0, elbowShoulderVertical = -0.15) // clear press progress, short of the 150 top
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0) // stable start -> scores the attempt
+
+        assertTrue(end.isRepCompleted)
+        assertFalse(end.isRepCorrect)
+        assertTrue(end.errors.contains(RepError.INSUFFICIENT_ELBOW_EXTENSION))
+        assertEquals("START", end.phaseName)
+    }
+
+    @Test
+    fun tinyJitterNearStart_doesNotCountAsIncorrect() {
+        establishStart()
+        feed(138.0, elbowShoulderVertical = -0.05) // barely past START, well short of a real press
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertFalse(end.isRepCompleted)
+        assertEquals("START", end.phaseName)
     }
 }
