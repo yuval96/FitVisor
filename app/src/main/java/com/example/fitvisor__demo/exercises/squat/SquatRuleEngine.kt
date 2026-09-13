@@ -18,11 +18,16 @@ import com.example.fitvisor__demo.utils.ConsecutiveGate
  *  - A technique violation during a rep is latched until the rep ends; a later
  *    correct frame never erases an earlier error.
  *
- * Excessive and insufficient torso lean are checked throughout both active
- * repetition phases: [State.DESCENDING] and [State.DOWN]. A violation in either
- * direction must persist for [ConsecutiveGate.requiredFrames] consecutive
- * frames before it invalidates the repetition, so one noisy frame does not fail
- * the rep. Standing frames do not participate in the minimum-lean check.
+ * Excessive torso lean (leaning too far forward) is checked throughout both
+ * active repetition phases: [State.DESCENDING] and [State.DOWN]. A violation
+ * must persist for [ConsecutiveGate.requiredFrames] consecutive frames before
+ * it invalidates the repetition, so one noisy frame does not fail the rep.
+ *
+ * There is deliberately no *minimum*-lean check: a squat performed with the
+ * torso staying upright the whole time (0 deg from vertical) is valid form
+ * and must never be penalized, so [RepError.INSUFFICIENT_TORSO_LEAN] is never
+ * produced here (kept in [RepError] only so old persisted workout history
+ * that recorded it can still be decoded).
  *
  * The three cycle-defining thresholds (leaving standing, reaching depth,
  * returning to standing) are debounced the same way, each requiring
@@ -38,7 +43,6 @@ class SquatRuleEngine {
         private const val REP_START_THRESHOLD = 160.0
         private const val SQUAT_DOWN_THRESHOLD = 110.0
         private const val SQUAT_UP_THRESHOLD = 160.0
-        private const val MIN_TORSO_INCLINATION = 0.0
         private const val MAX_TORSO_INCLINATION = 45.0
 
         private const val KNEE_TOE_OFFSET_LIMIT = 0.2
@@ -55,9 +59,8 @@ class SquatRuleEngine {
     private var reachedRequiredDepth = false
     private var techniqueValid = true
 
-    /** Each torso boundary has an independent two-frame debounce. */
+    /** Two-frame debounce for excessive torso lean. */
     private val excessiveTorsoLeanGate = ConsecutiveGate()
-    private val insufficientTorsoLeanGate = ConsecutiveGate()
 
     /** Debounces the three cycle-defining knee-angle thresholds; see class doc. */
     private val repStartGate = ConsecutiveGate()
@@ -101,8 +104,6 @@ class SquatRuleEngine {
 
         val excessiveTorsoLean =
             !torsoAngle.isNaN() && torsoAngle > MAX_TORSO_INCLINATION
-        val insufficientTorsoLean =
-            !torsoAngle.isNaN() && torsoAngle < MIN_TORSO_INCLINATION
         val kneeOverToeIssue =
             kneeOverToe != null &&
                 !kneeOverToe.normalizedKneeToeOffset.isNaN() &&
@@ -121,17 +122,9 @@ class SquatRuleEngine {
             currentState = State.DESCENDING
         }
 
-        val minimumLeanCheckActive =
-            repInProgress &&
-                !kneeAngle.isNaN() &&
-                kneeAngle < SQUAT_UP_THRESHOLD &&
-                (currentState == State.DESCENDING || currentState == State.DOWN)
-
-        // Live corrective cues show immediately, but minimum lean is irrelevant
-        // while the user is standing outside an active repetition.
+        // Live corrective cues show immediately.
         var warning: String? = when {
             excessiveTorsoLean -> "Keep your back straighter"
-            minimumLeanCheckActive && insufficientTorsoLean -> "Lean slightly forward"
             kneeMisaligned -> "Check knee alignment"
             kneeOverToeIssue -> "Knees are past toes"
             else -> null
@@ -152,14 +145,6 @@ class SquatRuleEngine {
             if (excessiveTorsoLeanGate.update(excessiveTorsoLean)) {
                 techniqueValid = false
                 errors.add(RepError.EXCESSIVE_TORSO_LEAN)
-            }
-
-            if (insufficientTorsoLeanGate.update(
-                    minimumLeanCheckActive && insufficientTorsoLean
-                )
-            ) {
-                techniqueValid = false
-                errors.add(RepError.INSUFFICIENT_TORSO_LEAN)
             }
 
             if (kneeOverToeGate.update(kneeOverToeIssue)) {
@@ -265,7 +250,6 @@ class SquatRuleEngine {
         reachedRequiredDepth = false
         techniqueValid = true
         excessiveTorsoLeanGate.reset()
-        insufficientTorsoLeanGate.reset()
         kneeOverToeGate.reset()
         downGate.reset()
         upGate.reset()
@@ -288,7 +272,6 @@ class SquatRuleEngine {
         reachedRequiredDepth = false
         techniqueValid = true
         excessiveTorsoLeanGate.reset()
-        insufficientTorsoLeanGate.reset()
         kneeOverToeGate.reset()
         repStartGate.reset()
         downGate.reset()
@@ -301,7 +284,6 @@ class SquatRuleEngine {
         reachedRequiredDepth = false
         techniqueValid = true
         excessiveTorsoLeanGate.reset()
-        insufficientTorsoLeanGate.reset()
         kneeOverToeGate.reset()
         repStartGate.reset()
         downGate.reset()

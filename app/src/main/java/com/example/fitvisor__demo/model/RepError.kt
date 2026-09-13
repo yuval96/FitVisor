@@ -18,6 +18,10 @@ package com.example.fitvisor__demo.model
  *    enough) are intentionally only a state-machine gate, not a scored fault:
  *    INVALID_START_POSITION, ELBOW_NOT_AT_SHOULDER_HEIGHT and
  *    INVALID_UPPER_ARM_ANGLE are declared for future use but never raised.
+ *  - Squat has no *minimum* torso lean requirement -- staying upright through
+ *    the whole rep is valid form -- so INSUFFICIENT_TORSO_LEAN is never
+ *    raised either; it is kept only so old persisted workout history that
+ *    recorded it (from before this was corrected) can still be decoded.
  */
 enum class RepError(val message: String) {
 

@@ -18,15 +18,9 @@ import org.junit.Test
  * every transition below is driven by a pair of identical frames via [arm] /
  * [reachDepth] / [returnToStanding] rather than a single reading.
  *
- * NOTE: [MIN_TORSO_INCLINATION] is currently 0.0 (a separate, pre-existing
- * change unrelated to this file), which makes `torsoAngle < 0.0` structurally
- * unreachable (torso angles are never negative) -- so INSUFFICIENT_TORSO_LEAN
- * can never actually trip right now. The two tests that exercise it
- * ([twoConsecutiveInsufficientTorsoLeanFrames_invalidateRep],
- * [fiveDegreesIsEnoughAndOnlyStandingIsExcluded]) are left in place, still
- * asserting the intended behavior, and will keep failing until that threshold
- * is revisited -- this is a known, separate issue, not caused by the
- * debouncing changes here.
+ * There is deliberately no *minimum* torso lean requirement: staying upright
+ * (0 deg from vertical) is valid squat form and must never be penalized --
+ * see [stayingUpright_neverInvalidatesRep].
  */
 class SquatRuleEngineTest {
 
@@ -105,65 +99,37 @@ class SquatRuleEngineTest {
     }
 
     @Test
-    fun singleInsufficientTorsoLeanFrame_doesNotInvalidateRep() {
-        feed(170.0, 20.0)
-        arm(torso = 20.0)
-        feed(130.0, 0.0)  // one violating descending frame
-        feed(90.0, 20.0)  // valid torso resets the debounce; depth frame 1
-        feed(90.0, 20.0)  // depth frame 2 -> DOWN
-        val end = returnToStanding(torso = 20.0)
+    fun stayingUpright_neverInvalidatesRep() {
+        // Torso stays at a perfect 0 deg from vertical for the entire rep --
+        // this is valid form and must never be flagged, no matter how long
+        // it persists (unlike excessive lean, there is no minimum-lean gate
+        // to debounce past).
+        feed(170.0, 0.0)
+        arm(torso = 0.0)
+        feed(130.0, 0.0)
+        feed(130.0, 0.0)
+        reachDepth(torso = 0.0)
+        feed(100.0, 0.0)
+        val end = returnToStanding(torso = 0.0)
 
         assertTrue(end.isRepCompleted)
         assertTrue(end.isRepCorrect)
         assertFalse(end.errors.contains(RepError.INSUFFICIENT_TORSO_LEAN))
+        assertTrue(end.errors.isEmpty())
     }
 
     @Test
-    fun twoConsecutiveInsufficientTorsoLeanFrames_invalidateRep() {
+    fun singleTorsoSpikeAboveLimit_doesNotInvalidateRep() {
         feed(170.0, 20.0)
         arm(torso = 20.0)
-        feed(130.0, 0.0) // descending violation frame 1
-        feed(130.0, 0.0) // descending violation frame 2 -> trips
-        feed(90.0, 20.0)  // depth frame 1
-        feed(90.0, 20.0)  // depth frame 2 -> DOWN
-        val end = returnToStanding(torso = 20.0)
-
-        assertTrue(end.isRepCompleted)
-        assertFalse(end.isRepCorrect)
-        assertTrue(end.errors.contains(RepError.INSUFFICIENT_TORSO_LEAN))
-    }
-
-    @Test
-    fun minimumAndMaximumTorsoLeanUseIndependentDebounceGates() {
-        feed(170.0, 20.0)
-        arm(torso = 20.0)
-        feed(130.0, 50.0) // excessive frame 1
-        feed(130.0, 0.0)  // insufficient frame 1; neither may trip yet
-        feed(130.0, 20.0) // valid torso resets both gates
+        feed(130.0, 50.0) // ONE noisy excessive-lean frame while descending
+        feed(130.0, 20.0) // good again, resets the debounce
         reachDepth(torso = 20.0)
         val end = returnToStanding(torso = 20.0)
 
         assertTrue(end.isRepCompleted)
         assertTrue(end.isRepCorrect)
         assertTrue(end.errors.isEmpty())
-    }
-
-    @Test
-    fun fiveDegreesIsEnoughAndOnlyStandingIsExcluded() {
-        val standing = feed(170.0, 0.0)    // standing upright: ignored
-        feed(140.0, 0.0)
-        val descending = feed(140.0, 0.0)  // descending: minimum lean applies
-        feed(120.0, 5.0)                   // exactly 5 deg is valid and resets the gate
-        feed(100.0, 5.0)
-        feed(100.0, 5.0)                   // exactly 5 deg is also valid while down; depth reached
-        feed(120.0, 0.0)                   // one violating DOWN/rising frame
-        val end = returnToStanding(torso = 0.0) // standing completion frames are excluded
-
-        assertEquals(null, standing.warning)
-        assertEquals("Lean slightly forward", descending.warning)
-        assertTrue(end.isRepCompleted)
-        assertTrue(end.isRepCorrect)
-        assertFalse(end.errors.contains(RepError.INSUFFICIENT_TORSO_LEAN))
     }
 
     @Test
