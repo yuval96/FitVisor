@@ -28,7 +28,7 @@ class SquatRuleEngine {
 
     companion object {
         private const val REP_START_THRESHOLD = 160.0
-        private const val SQUAT_DOWN_THRESHOLD = 100.0
+        private const val SQUAT_DOWN_THRESHOLD = 110.0
         private const val SQUAT_UP_THRESHOLD = 160.0
         private const val MIN_TORSO_INCLINATION = 0.0
         private const val MAX_TORSO_INCLINATION = 45.0

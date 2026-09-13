@@ -27,7 +27,8 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * normalized knee-to-toe offset) for whichever leg [kneeOverToeLegTracker]
  * currently has locked in — independent of [useLeft] above, since it only
  * needs knee/ankle/foot-index confidence, not the shoulder/hip/knee/ankle set
- * used for the primary knee/torso angles. This stays 2D for now.
+ * used for the primary knee/torso angles. Same 3D-preferred, 2D-fallback
+ * pattern as the primary angles.
  */
 class SquatAnalyzer(
     poseQualityEnabled: () -> Boolean = { false }
@@ -134,14 +135,38 @@ class SquatAnalyzer(
         val footIndex = if (useLeftLeg) leftFootIndex else rightFootIndex
         val confidence = if (useLeftLeg) leftScore else rightScore
 
+        val kneeIndex = if (useLeftLeg) PoseLandmarkIndices.L_KNEE else PoseLandmarkIndices.R_KNEE
+        val ankleIndex = if (useLeftLeg) PoseLandmarkIndices.L_ANKLE else PoseLandmarkIndices.R_ANKLE
+        val footIndexIndex =
+            if (useLeftLeg) PoseLandmarkIndices.L_FOOT_INDEX else PoseLandmarkIndices.R_FOOT_INDEX
+
+        val ankleAngle = worldAnkleAngle(kneeIndex, ankleIndex, footIndexIndex)
+            ?: KinematicCalculator.calculateAngle(knee, ankle, footIndex, imageWidth, imageHeight)
+        val kneeToeOffset = worldKneeToeOffset(kneeIndex, ankleIndex, footIndexIndex)
+            ?: KinematicCalculator.normalizedKneeToeOffset(knee, ankle, footIndex, imageWidth, imageHeight)
+
         return KneeOverToeMetrics(
             legIsLeft = useLeftLeg,
             confidence = confidence,
-            ankleAngle = KinematicCalculator.calculateAngle(knee, ankle, footIndex, imageWidth, imageHeight),
-            normalizedKneeToeOffset = KinematicCalculator.normalizedKneeToeOffset(
-                knee, ankle, footIndex, imageWidth, imageHeight
-            )
+            ankleAngle = ankleAngle,
+            normalizedKneeToeOffset = kneeToeOffset
         )
+    }
+
+    /** 3D ankle (knee-ankle-footIndex) angle from [worldLandmarks], or null if unavailable. */
+    private fun worldAnkleAngle(kneeIndex: Int, ankleIndex: Int, footIndexIndex: Int): Double? {
+        val knee = worldLandmarks.getOrNull(kneeIndex) ?: return null
+        val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
+        val footIndex = worldLandmarks.getOrNull(footIndexIndex) ?: return null
+        return KinematicCalculator.calculateAngle3D(knee, ankle, footIndex).takeUnless { it.isNaN() }
+    }
+
+    /** 3D normalized knee-to-toe offset from [worldLandmarks], or null if unavailable. */
+    private fun worldKneeToeOffset(kneeIndex: Int, ankleIndex: Int, footIndexIndex: Int): Double? {
+        val knee = worldLandmarks.getOrNull(kneeIndex) ?: return null
+        val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
+        val footIndex = worldLandmarks.getOrNull(footIndexIndex) ?: return null
+        return KinematicCalculator.normalizedKneeToeOffset3D(knee, ankle, footIndex).takeUnless { it.isNaN() }
     }
 
     override fun resetEngine() {

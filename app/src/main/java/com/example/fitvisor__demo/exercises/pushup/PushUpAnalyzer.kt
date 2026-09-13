@@ -10,7 +10,11 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 /**
  * Side-view push-up analyzer. Metrics: elbow angle (wrist-elbow-shoulder),
  * body-line angle (shoulder-hip-ankle) and the hip-to-ankle tilt relative to
- * horizontal.
+ * horizontal. All three prefer MediaPipe's real-world (metric) 3D landmarks
+ * ([SideViewAnalyzer.worldLandmarks]) when available, falling back to the
+ * original 2D image-space calculation otherwise -- the 2D version is only
+ * accurate in an exact side-on profile stance; see [KinematicCalculator]'s
+ * class doc.
  */
 class PushUpAnalyzer(
     poseQualityEnabled: () -> Boolean = { false }
@@ -40,21 +44,24 @@ class PushUpAnalyzer(
         imageWidth: Int,
         imageHeight: Int
     ): ExerciseFrameOutput {
-        val shoulder = landmarks[if (useLeft) PoseLandmarkIndices.L_SH else PoseLandmarkIndices.R_SH]
-        val elbow = landmarks[if (useLeft) PoseLandmarkIndices.L_ELBOW else PoseLandmarkIndices.R_ELBOW]
-        val wrist = landmarks[if (useLeft) PoseLandmarkIndices.L_WRIST else PoseLandmarkIndices.R_WRIST]
-        val hip = landmarks[if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP]
-        val ankle = landmarks[if (useLeft) PoseLandmarkIndices.L_ANKLE else PoseLandmarkIndices.R_ANKLE]
+        val shIndex = if (useLeft) PoseLandmarkIndices.L_SH else PoseLandmarkIndices.R_SH
+        val elbowIndex = if (useLeft) PoseLandmarkIndices.L_ELBOW else PoseLandmarkIndices.R_ELBOW
+        val wristIndex = if (useLeft) PoseLandmarkIndices.L_WRIST else PoseLandmarkIndices.R_WRIST
+        val hipIndex = if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP
+        val ankleIndex = if (useLeft) PoseLandmarkIndices.L_ANKLE else PoseLandmarkIndices.R_ANKLE
 
-        val elbowAngle = KinematicCalculator.calculateAngle(
-            wrist, elbow, shoulder, imageWidth, imageHeight
-        )
-        val bodyLineAngle = KinematicCalculator.bodyLineAngle(
-            shoulder, hip, ankle, imageWidth, imageHeight
-        )
-        val horizontalAngle = KinematicCalculator.angleFromHorizontal(
-            hip, ankle, imageWidth, imageHeight
-        )
+        val shoulder = landmarks[shIndex]
+        val elbow = landmarks[elbowIndex]
+        val wrist = landmarks[wristIndex]
+        val hip = landmarks[hipIndex]
+        val ankle = landmarks[ankleIndex]
+
+        val elbowAngle = worldAngle3(wristIndex, elbowIndex, shIndex)
+            ?: KinematicCalculator.calculateAngle(wrist, elbow, shoulder, imageWidth, imageHeight)
+        val bodyLineAngle = worldAngle3(shIndex, hipIndex, ankleIndex)
+            ?: KinematicCalculator.bodyLineAngle(shoulder, hip, ankle, imageWidth, imageHeight)
+        val horizontalAngle = worldHorizontalAngle(hipIndex, ankleIndex)
+            ?: KinematicCalculator.angleFromHorizontal(hip, ankle, imageWidth, imageHeight)
 
         val result = engine.processFrame(elbowAngle, bodyLineAngle, horizontalAngle)
 
@@ -68,6 +75,25 @@ class PushUpAnalyzer(
             phase = result.phaseName
         )
         return ExerciseFrameOutput(result, metrics)
+    }
+
+    /** 3D angle at [midIndex] from [worldLandmarks], or null if unavailable. */
+    private fun worldAngle3(firstIndex: Int, midIndex: Int, lastIndex: Int): Double? {
+        val first = worldLandmarks.getOrNull(firstIndex) ?: return null
+        val mid = worldLandmarks.getOrNull(midIndex) ?: return null
+        val last = worldLandmarks.getOrNull(lastIndex) ?: return null
+        return KinematicCalculator.calculateAngle3D(first, mid, last).takeUnless { it.isNaN() }
+    }
+
+    /**
+     * 3D horizontal-deviation magnitude from [worldLandmarks], or null if
+     * unavailable. Unsigned (see [KinematicCalculator.angleFromHorizontal3D]),
+     * which is safe here: [PushUpRuleEngine] only ever compares `abs(...)`.
+     */
+    private fun worldHorizontalAngle(fromIndex: Int, toIndex: Int): Double? {
+        val from = worldLandmarks.getOrNull(fromIndex) ?: return null
+        val to = worldLandmarks.getOrNull(toIndex) ?: return null
+        return KinematicCalculator.angleFromHorizontal3D(from, to).takeUnless { it.isNaN() }
     }
 
     override fun resetEngine() = engine.reset()

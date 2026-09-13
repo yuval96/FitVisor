@@ -31,6 +31,15 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * Upper-arm-to-torso angle is still computed for the overlay/debug only and
  * is deliberately not a correctness criterion (see the engine's doc).
  *
+ * Elbow angle, upper-arm angle and the shoulder->wrist/hip vertical angles
+ * (feeding arm-verticality, symmetry and torso lean) all prefer MediaPipe's
+ * real-world (metric) 3D landmarks when available, falling back to the
+ * original 2D image-space calculation otherwise -- see [KinematicCalculator]'s
+ * class doc for why. The height-gate inputs ([ArmMetrics.elbowShoulderVertical],
+ * [ArmMetrics.bodyScale]) stay 2D/normalized-image-based on purpose: they are a
+ * proximity check, not a joint angle, and their thresholds are calibrated in
+ * normalized-image units.
+ *
  * When [debugEnabled] is on, this analyzer also emits
  * temporary Logcat debug (per-side angles, phase, failing rule and per-rep
  * min/max ranges) for on-device threshold tuning. See that flag's doc.
@@ -106,9 +115,13 @@ class ShoulderPressAnalyzer(
         // Per-arm metrics for whichever arm(s) are reliable; kept separate for
         // debug, then averaged into the single values the rule engine consumes.
         val leftMetrics =
-            if (leftReliable) armMetrics(leftLandmarks, imageWidth, imageHeight) else null
+            if (leftReliable) {
+                armMetrics(leftLandmarks, worldArmLandmarks(worldLandmarks, useLeft = true), imageWidth, imageHeight)
+            } else null
         val rightMetrics =
-            if (rightReliable) armMetrics(rightLandmarks, imageWidth, imageHeight) else null
+            if (rightReliable) {
+                armMetrics(rightLandmarks, worldArmLandmarks(worldLandmarks, useLeft = false), imageWidth, imageHeight)
+            } else null
 
         val elbow = Averager()
         val upperArm = Averager()
@@ -168,8 +181,17 @@ class ShoulderPressAnalyzer(
         landmarks[if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP]
     )
 
+    /**
+     * @param requiredLandmarks 2D [shoulder, elbow, wrist, hip], in that order.
+     * @param worldArm the same four joints as MediaPipe real-world (metric) 3D
+     *   landmarks, in the same order, or null when unavailable for this arm.
+     *   Elbow angle, upper-arm angle and shoulder->wrist/hip vertical angles
+     *   prefer this over the 2D calculation; [elbowShoulderVertical] and
+     *   [bodyScale] stay 2D/normalized-image-based (see the class doc).
+     */
     private fun armMetrics(
         requiredLandmarks: List<NormalizedLandmark>,
+        worldArm: List<Landmark>?,
         imageWidth: Int,
         imageHeight: Int
     ): ArmMetrics {
@@ -178,16 +200,57 @@ class ShoulderPressAnalyzer(
         val wr = requiredLandmarks[2]
         val hip = requiredLandmarks[3]
 
+        val worldSh = worldArm?.get(0)
+        val worldEl = worldArm?.get(1)
+        val worldWr = worldArm?.get(2)
+        val worldHip = worldArm?.get(3)
+
+        val elbowAngle = angle3(worldSh, worldEl, worldWr)
+            ?: KinematicCalculator.calculateAngle(sh, el, wr, imageWidth, imageHeight)
+        val upperArmAngle = angle3(worldEl, worldSh, worldHip)
+            ?: KinematicCalculator.upperArmToTorsoAngle(sh, el, hip, imageWidth, imageHeight)
+        val shoulderWristVertical = vertical3(worldSh, worldWr)
+            ?: KinematicCalculator.angleFromVertical(sh, wr, imageWidth, imageHeight)
+        val torsoAngle = vertical3(worldSh, worldHip)
+            ?: KinematicCalculator.angleFromVertical(sh, hip, imageWidth, imageHeight)
+
         return ArmMetrics(
-            elbow = KinematicCalculator.calculateAngle(sh, el, wr, imageWidth, imageHeight),
-            upperArm = KinematicCalculator.upperArmToTorsoAngle(sh, el, hip, imageWidth, imageHeight),
-            shoulderWristVertical = KinematicCalculator.angleFromVertical(sh, wr, imageWidth, imageHeight),
-            torso = KinematicCalculator.angleFromVertical(sh, hip, imageWidth, imageHeight),
+            elbow = elbowAngle,
+            upperArm = upperArmAngle,
+            shoulderWristVertical = shoulderWristVertical,
+            torso = torsoAngle,
+            // Height-gate inputs stay 2D/normalized-image-based: they aren't a
+            // joint angle susceptible to projection distortion, just a
+            // proximity check, and their thresholds are calibrated in
+            // normalized-image units.
             elbowShoulderVertical = KinematicCalculator.normalizedVerticalDistance(el, sh),
             // Body-relative scale: normalized torso length (shoulder->hip). Used
             // by the engine to size the "elbow at shoulder height" tolerance.
             bodyScale = kotlin.math.abs(sh.y() - hip.y()).toDouble()
         )
+    }
+
+    /** [shoulder, elbow, wrist, hip] world landmarks for one arm, or null if any is missing. */
+    private fun worldArmLandmarks(worldLandmarks: List<Landmark>, useLeft: Boolean): List<Landmark>? {
+        val sh = worldLandmarks.getOrNull(if (useLeft) PoseLandmarkIndices.L_SH else PoseLandmarkIndices.R_SH)
+            ?: return null
+        val el = worldLandmarks.getOrNull(if (useLeft) PoseLandmarkIndices.L_ELBOW else PoseLandmarkIndices.R_ELBOW)
+            ?: return null
+        val wr = worldLandmarks.getOrNull(if (useLeft) PoseLandmarkIndices.L_WRIST else PoseLandmarkIndices.R_WRIST)
+            ?: return null
+        val hip = worldLandmarks.getOrNull(if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP)
+            ?: return null
+        return listOf(sh, el, wr, hip)
+    }
+
+    private fun angle3(first: Landmark?, mid: Landmark?, last: Landmark?): Double? {
+        if (first == null || mid == null || last == null) return null
+        return KinematicCalculator.calculateAngle3D(first, mid, last).takeUnless { it.isNaN() }
+    }
+
+    private fun vertical3(a: Landmark?, b: Landmark?): Double? {
+        if (a == null || b == null) return null
+        return KinematicCalculator.angleFromVertical3D(a, b).takeUnless { it.isNaN() }
     }
 
     /** Logcat diagnostics controlled by the runtime debug switch. */

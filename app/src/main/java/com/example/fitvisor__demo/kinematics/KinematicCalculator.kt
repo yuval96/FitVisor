@@ -189,6 +189,33 @@ object KinematicCalculator {
     }
 
     /**
+     * 3D generalization of [angleFromHorizontal]'s *magnitude* (not its sign):
+     * deviation of the segment [from]->[to] from the horizontal plane, in
+     * degrees (0..90), using MediaPipe's real-world (metric) [Landmark]
+     * coordinates. 0 means horizontal, 90 means vertical.
+     *
+     * Unsigned, unlike the 2D version: after an arbitrary rotation around the
+     * vertical axis there is no single well-defined "forward" horizontal
+     * direction to sign against, only the vertical (Y) axis is rotation-
+     * invariant (see [angleFromVertical3D]). Every current caller of the 2D
+     * function already takes `abs()` of the result, so this loses nothing in
+     * practice while being robust to the subject's rotation toward the camera.
+     * Returns [Double.NaN] for a degenerate (zero-length) segment.
+     */
+    fun angleFromHorizontal3D(from: Landmark, to: Landmark): Double {
+        val deltaX = (to.x() - from.x()).toDouble()
+        val deltaY = (to.y() - from.y()).toDouble()
+        val deltaZ = (to.z() - from.z()).toDouble()
+
+        val length = sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
+        if (length == 0.0) return Double.NaN
+
+        val horizontalLength = sqrt(deltaX * deltaX + deltaZ * deltaZ)
+        val cosAngle = (horizontalLength / length).coerceIn(-1.0, 1.0)
+        return Math.toDegrees(acos(cosAngle))
+    }
+
+    /**
      * Body-line angle: the angle at the hip formed by shoulder-hip-ankle
      * (~180 when the body is a straight line). Convenience over [calculateAngle].
      */
@@ -266,6 +293,34 @@ object KinematicCalculator {
 
         // Scalar projection of the knee vector onto the foot's forward axis.
         val forwardDistance = (kneeX * footX + kneeY * footY) / footLength
+        return forwardDistance / footLength
+    }
+
+    /**
+     * 3D generalization of [normalizedKneeToeOffset], using MediaPipe's
+     * real-world (metric) [Landmark] coordinates -- same "how many foot
+     * lengths forward" ratio, computed from real 3D vectors instead of a 2D
+     * image projection. No image width/height needed: world coordinates are
+     * already metric. Returns [Double.NaN] for a degenerate (zero-length)
+     * foot vector.
+     */
+    fun normalizedKneeToeOffset3D(
+        knee: Landmark,
+        ankle: Landmark,
+        footIndex: Landmark
+    ): Double {
+        val footX = (footIndex.x() - ankle.x()).toDouble()
+        val footY = (footIndex.y() - ankle.y()).toDouble()
+        val footZ = (footIndex.z() - ankle.z()).toDouble()
+        val footLength = sqrt(footX * footX + footY * footY + footZ * footZ)
+        if (footLength == 0.0) return Double.NaN
+
+        val kneeX = (knee.x() - ankle.x()).toDouble()
+        val kneeY = (knee.y() - ankle.y()).toDouble()
+        val kneeZ = (knee.z() - ankle.z()).toDouble()
+
+        // Scalar projection of the knee vector onto the foot's forward axis.
+        val forwardDistance = (kneeX * footX + kneeY * footY + kneeZ * footZ) / footLength
         return forwardDistance / footLength
     }
 }
