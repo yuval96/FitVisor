@@ -13,6 +13,7 @@ import com.example.fitvisor__demo.model.minKeepNaN
 import com.example.fitvisor__demo.pose.LandmarkConfidence
 import com.example.fitvisor__demo.pose.PoseLandmarkIndices
 import com.example.fitvisor__demo.pose.SideSelector
+import com.google.mediapipe.tasks.components.containers.Landmark
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
 /**
@@ -53,7 +54,8 @@ class ShoulderPressAnalyzer(
         landmarks: List<NormalizedLandmark>,
         imageWidth: Int,
         imageHeight: Int,
-        rawLandmarks: List<NormalizedLandmark>
+        rawLandmarks: List<NormalizedLandmark>,
+        worldLandmarks: List<Landmark>
     ): ExerciseFrameOutput {
 
         if (landmarks.size < LANDMARK_COUNT) {

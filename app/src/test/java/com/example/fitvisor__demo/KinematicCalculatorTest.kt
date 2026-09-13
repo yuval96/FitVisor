@@ -1,11 +1,14 @@
 package com.example.fitvisor__demo
 
 import com.example.fitvisor__demo.kinematics.KinematicCalculator
+import com.google.mediapipe.tasks.components.containers.Landmark
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Optional
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Geometry tests for [KinematicCalculator]. A square image is used so the
@@ -17,6 +20,8 @@ class KinematicCalculatorTest {
 
     private fun lm(x: Float, y: Float): NormalizedLandmark =
         NormalizedLandmark.create(x, y, 0f, Optional.of(1f), Optional.of(1f))
+
+    private fun wlm(x: Float, y: Float, z: Float = 0f): Landmark = Landmark.create(x, y, z)
 
     @Test
     fun threePointAngle_isNinetyDegrees() {
@@ -130,5 +135,121 @@ class KinematicCalculatorTest {
             size, size
         )
         assertTrue(offset.isNaN())
+    }
+
+    // --- 3D (world-landmark) geometry --------------------------------------
+
+    @Test
+    fun threePointAngle3D_isNinetyDegrees() {
+        val angle = KinematicCalculator.calculateAngle3D(
+            wlm(0f, 1f, 0f), // below the vertex
+            wlm(0f, 0f, 0f), // vertex
+            wlm(1f, 0f, 0f)  // right of the vertex
+        )
+        assertEquals(90.0, angle, 0.01)
+    }
+
+    @Test
+    fun threePointAngle3D_straightLineIsOneEighty() {
+        val angle = KinematicCalculator.calculateAngle3D(
+            wlm(0f, 0f, 0f),
+            wlm(0.5f, 0f, 0f),
+            wlm(1f, 0f, 0f)
+        )
+        assertEquals(180.0, angle, 0.01)
+    }
+
+    @Test
+    fun threePointAngle3D_degenerateVector_returnsNaN() {
+        val angle = KinematicCalculator.calculateAngle3D(
+            wlm(0f, 0f, 0f),
+            wlm(0f, 0f, 0f), // coincides with the vertex
+            wlm(1f, 0f, 0f)
+        )
+        assertTrue(angle.isNaN())
+    }
+
+    /**
+     * The whole point of the 3D version: a joint bent 90 degrees stays
+     * readable as 90 degrees no matter which way the subject is rotated
+     * (around the vertical Y axis) relative to the camera -- unlike a 2D
+     * image-space projection of the same joint, which distorts as soon as
+     * the subject isn't in an exact profile stance.
+     */
+    @Test
+    fun threePointAngle3D_isInvariantToRotationAroundVerticalAxis() {
+        fun angleAtRotation(radians: Double): Double {
+            // A right angle in the X-Z plane at the origin: one arm along
+            // +X, the other along +Z, then both rotated together by
+            // [radians] around the vertical (Y) axis -- simulating the
+            // subject turning left/right relative to the camera while
+            // holding the same true 3D joint angle.
+            fun rotate(x: Float, z: Float): Pair<Float, Float> {
+                val rx = x * cos(radians) - z * sin(radians)
+                val rz = x * sin(radians) + z * cos(radians)
+                return rx.toFloat() to rz.toFloat()
+            }
+            val (x1, z1) = rotate(1f, 0f)
+            val (x2, z2) = rotate(0f, 1f)
+            return KinematicCalculator.calculateAngle3D(
+                wlm(x1, 0f, z1),
+                wlm(0f, 0f, 0f),
+                wlm(x2, 0f, z2)
+            )
+        }
+
+        assertEquals(90.0, angleAtRotation(0.0), 0.01)
+        assertEquals(90.0, angleAtRotation(Math.PI / 4), 0.01)   // 45 degrees
+        assertEquals(90.0, angleAtRotation(Math.PI / 2), 0.01)   // 90 degrees
+        assertEquals(90.0, angleAtRotation(1.1), 0.01)           // arbitrary angle
+    }
+
+    @Test
+    fun verticalSegment3D_isZeroFromVertical() {
+        val angle = KinematicCalculator.angleFromVertical3D(
+            wlm(0.5f, 0.1f, 0f),
+            wlm(0.5f, 0.9f, 0f)
+        )
+        assertEquals(0.0, angle, 0.01)
+    }
+
+    @Test
+    fun verticalSegment3D_withMatchingXZ_isStillZeroRegardlessOfZ() {
+        // Same X/Z at both ends (pure vertical segment) reads 0 deg from
+        // vertical no matter what that shared X/Z offset is -- i.e. no
+        // matter how far forward/back (Z) the subject stands from the
+        // camera, unlike the 2D version which has no Z axis at all.
+        val angle = KinematicCalculator.angleFromVertical3D(
+            wlm(0.5f, 0.1f, 0.7f),
+            wlm(0.5f, 0.9f, 0.7f)
+        )
+        assertEquals(0.0, angle, 0.01)
+    }
+
+    @Test
+    fun tiltedSegment3D_notPurelyVertical_isGreaterThanZero() {
+        val angle = KinematicCalculator.angleFromVertical3D(
+            wlm(0.3f, 0.1f, 0.4f),
+            wlm(0.6f, 0.9f, 0.1f)
+        )
+        assertTrue("differing X/Z must not read as perfectly vertical", angle > 0.0)
+    }
+
+    @Test
+    fun horizontalSegment3D_isNinetyFromVertical() {
+        val angle = KinematicCalculator.angleFromVertical3D(
+            wlm(0.1f, 0.5f, 0f),
+            wlm(0.9f, 0.5f, 0f)
+        )
+        assertEquals(90.0, angle, 0.01)
+    }
+
+    @Test
+    fun degenerateSegment3D_returnsNaN() {
+        val angle = KinematicCalculator.angleFromVertical3D(
+            wlm(0.5f, 0.5f, 0.5f),
+            wlm(0.5f, 0.5f, 0.5f)
+        )
+        assertTrue(angle.isNaN())
     }
 }

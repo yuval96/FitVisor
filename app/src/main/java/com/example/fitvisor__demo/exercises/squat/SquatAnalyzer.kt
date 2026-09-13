@@ -14,11 +14,20 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * (hip-knee-ankle) and torso inclination (shoulder-hip vs vertical). The 2D
  * knee-alignment rule stays disabled, as in the original implementation.
  *
+ * Knee and torso angle prefer MediaPipe's real-world (metric) 3D landmarks
+ * ([SideViewAnalyzer.worldLandmarks], via [KinematicCalculator]'s `*3D`
+ * functions) when available, falling back to the original 2D image-space
+ * calculation otherwise. The 2D angle is only accurate when the user is in
+ * an exact side-on profile relative to the camera; any rotation distorts it,
+ * and by a different amount as the joint moves through the rep, which reads
+ * as inconsistent knee angles between otherwise-identical repetitions. The
+ * 3D version is far less sensitive to that.
+ *
  * Also computes the knee-over-toe check's kinematic inputs (ankle angle and
  * normalized knee-to-toe offset) for whichever leg [kneeOverToeLegTracker]
  * currently has locked in — independent of [useLeft] above, since it only
  * needs knee/ankle/foot-index confidence, not the shoulder/hip/knee/ankle set
- * used for the primary knee/torso angles.
+ * used for the primary knee/torso angles. This stays 2D for now.
  */
 class SquatAnalyzer(
     poseQualityEnabled: () -> Boolean = { false }
@@ -47,17 +56,20 @@ class SquatAnalyzer(
         imageWidth: Int,
         imageHeight: Int
     ): ExerciseFrameOutput {
-        val shoulder = landmarks[if (useLeft) PoseLandmarkIndices.L_SH else PoseLandmarkIndices.R_SH]
-        val hip = landmarks[if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP]
-        val knee = landmarks[if (useLeft) PoseLandmarkIndices.L_KNEE else PoseLandmarkIndices.R_KNEE]
-        val ankle = landmarks[if (useLeft) PoseLandmarkIndices.L_ANKLE else PoseLandmarkIndices.R_ANKLE]
+        val shIndex = if (useLeft) PoseLandmarkIndices.L_SH else PoseLandmarkIndices.R_SH
+        val hipIndex = if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP
+        val kneeIndex = if (useLeft) PoseLandmarkIndices.L_KNEE else PoseLandmarkIndices.R_KNEE
+        val ankleIndex = if (useLeft) PoseLandmarkIndices.L_ANKLE else PoseLandmarkIndices.R_ANKLE
 
-        val kneeAngle = KinematicCalculator.calculateAngle(
-            hip, knee, ankle, imageWidth, imageHeight
-        )
-        val torsoAngle = KinematicCalculator.angleFromVertical(
-            shoulder, hip, imageWidth, imageHeight
-        )
+        val shoulder = landmarks[shIndex]
+        val hip = landmarks[hipIndex]
+        val knee = landmarks[kneeIndex]
+        val ankle = landmarks[ankleIndex]
+
+        val kneeAngle = worldKneeAngle(hipIndex, kneeIndex, ankleIndex)
+            ?: KinematicCalculator.calculateAngle(hip, knee, ankle, imageWidth, imageHeight)
+        val torsoAngle = worldTorsoAngle(shIndex, hipIndex)
+            ?: KinematicCalculator.angleFromVertical(shoulder, hip, imageWidth, imageHeight)
 
         // Knee alignment rule intentionally disabled (2D was unreliable).
         val kneeMisaligned = false
@@ -74,6 +86,21 @@ class SquatAnalyzer(
             phase = result.phaseName
         )
         return ExerciseFrameOutput(result, metrics)
+    }
+
+    /** 3D knee (hip-knee-ankle) angle from [worldLandmarks], or null if unavailable. */
+    private fun worldKneeAngle(hipIndex: Int, kneeIndex: Int, ankleIndex: Int): Double? {
+        val hip = worldLandmarks.getOrNull(hipIndex) ?: return null
+        val knee = worldLandmarks.getOrNull(kneeIndex) ?: return null
+        val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
+        return KinematicCalculator.calculateAngle3D(hip, knee, ankle).takeUnless { it.isNaN() }
+    }
+
+    /** 3D torso-from-vertical angle from [worldLandmarks], or null if unavailable. */
+    private fun worldTorsoAngle(shIndex: Int, hipIndex: Int): Double? {
+        val shoulder = worldLandmarks.getOrNull(shIndex) ?: return null
+        val hip = worldLandmarks.getOrNull(hipIndex) ?: return null
+        return KinematicCalculator.angleFromVertical3D(shoulder, hip).takeUnless { it.isNaN() }
     }
 
     /**

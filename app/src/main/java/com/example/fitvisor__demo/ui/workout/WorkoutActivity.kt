@@ -304,6 +304,8 @@ class WorkoutActivity :
             var debugUpdateAfterFrame: DebugSessionUpdate? = null
             val rawLandmarks =
                 result.landmarks().firstOrNull()
+            val worldLandmarks =
+                result.worldLandmarks().firstOrNull().orEmpty()
 
             val smoothedLandmarks =
                 rawLandmarks?.let {
@@ -316,7 +318,8 @@ class WorkoutActivity :
                         smoothedLandmarks,
                         imageWidth,
                         imageHeight,
-                        rawLandmarks
+                        rawLandmarks,
+                        worldLandmarks
                     )
                 } else {
                     ExerciseFrameOutput(

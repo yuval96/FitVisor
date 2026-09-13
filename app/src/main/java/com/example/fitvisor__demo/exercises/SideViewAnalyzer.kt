@@ -4,6 +4,7 @@ import com.example.fitvisor__demo.model.ExerciseAnalysisResult
 import com.example.fitvisor__demo.model.OverlayMetrics
 import com.example.fitvisor__demo.pose.LandmarkConfidence
 import com.example.fitvisor__demo.pose.SideSelector
+import com.google.mediapipe.tasks.components.containers.Landmark
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
 /**
@@ -24,6 +25,16 @@ abstract class SideViewAnalyzer(
 
     private var missingFrames = 0
     private var lastPhase: String? = null
+
+    /**
+     * Real-world (metric) 3D landmarks for the frame currently being
+     * analyzed, refreshed at the top of every [analyze] call. Empty when
+     * unavailable. Subclasses that want camera-angle-robust geometry read
+     * this inside [analyzeSide] (see [com.example.fitvisor__demo.kinematics.KinematicCalculator]'s
+     * `*3D` functions); subclasses that stay purely 2D simply never touch it.
+     */
+    protected var worldLandmarks: List<Landmark> = emptyList()
+        private set
 
     /** Landmarks required on the left / right side, for confidence + gating. */
     protected abstract fun leftLandmarks(
@@ -48,12 +59,15 @@ abstract class SideViewAnalyzer(
         landmarks: List<NormalizedLandmark>,
         imageWidth: Int,
         imageHeight: Int,
-        rawLandmarks: List<NormalizedLandmark>
+        rawLandmarks: List<NormalizedLandmark>,
+        worldLandmarks: List<Landmark>
     ): ExerciseFrameOutput {
 
         if (landmarks.size < LANDMARK_COUNT) {
             return notVisible()
         }
+
+        this.worldLandmarks = worldLandmarks
 
         val left = leftLandmarks(landmarks)
         val right = rightLandmarks(landmarks)
@@ -108,6 +122,7 @@ abstract class SideViewAnalyzer(
         sideSelector.reset()
         missingFrames = 0
         lastPhase = null
+        worldLandmarks = emptyList()
         resetEngine()
     }
 

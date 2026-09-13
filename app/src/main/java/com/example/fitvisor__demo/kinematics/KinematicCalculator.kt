@@ -1,8 +1,11 @@
 package com.example.fitvisor__demo.kinematics
 
+import com.google.mediapipe.tasks.components.containers.Landmark
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import kotlin.math.abs
+import kotlin.math.acos
 import kotlin.math.atan2
+import kotlin.math.sqrt
 
 /**
  * Normalization and Kinematic Calculator Module.
@@ -11,6 +14,19 @@ import kotlin.math.atan2
  * All 2D angle calculations multiply the normalized coordinates by the image
  * width/height first, because MediaPipe normalizes X and Y independently on each
  * axis; skipping this would distort every angle on non-square frames.
+ *
+ * The `*3D` functions below instead work on MediaPipe's [Landmark] ("world
+ * landmark") output -- real-world, metric 3D coordinates -- rather than the
+ * normalized 2D image-space [NormalizedLandmark]. A 2D projection of a joint
+ * angle is only accurate when the joint's plane of motion is parallel to the
+ * camera's image plane (e.g. an exact side-on profile for a squat); any
+ * rotation of the subject relative to the camera distorts it, and by a
+ * different amount depending on the joint's momentary 3D orientation -- so
+ * the same *true* angle can read very differently frame to frame as a limb
+ * moves, even with a perfectly steady camera and consistent form. The 3D
+ * versions compute the real angle between world-space vectors instead, which
+ * is far less sensitive to exactly how the subject is rotated toward the
+ * camera.
  */
 
 
@@ -62,6 +78,39 @@ object KinematicCalculator {
     }
 
     /**
+     * 3D generalization of [calculateAngle]: the real angle at [midPoint],
+     * in degrees (0..180), computed from MediaPipe's real-world (metric)
+     * [Landmark] coordinates instead of a 2D image projection. Unlike the 2D
+     * version this does not depend on the subject being in an exact profile
+     * stance relative to the camera -- see the class doc.
+     * Returns [Double.NaN] for a degenerate (zero-length) input vector.
+     */
+    fun calculateAngle3D(
+        firstPoint: Landmark,
+        midPoint: Landmark,
+        lastPoint: Landmark
+    ): Double {
+        val v1x = (firstPoint.x() - midPoint.x()).toDouble()
+        val v1y = (firstPoint.y() - midPoint.y()).toDouble()
+        val v1z = (firstPoint.z() - midPoint.z()).toDouble()
+
+        val v2x = (lastPoint.x() - midPoint.x()).toDouble()
+        val v2y = (lastPoint.y() - midPoint.y()).toDouble()
+        val v2z = (lastPoint.z() - midPoint.z()).toDouble()
+
+        val v1Length = sqrt(v1x * v1x + v1y * v1y + v1z * v1z)
+        val v2Length = sqrt(v2x * v2x + v2y * v2y + v2z * v2z)
+        if (v1Length == 0.0 || v2Length == 0.0) return Double.NaN
+
+        val dot = v1x * v2x + v1y * v2y + v1z * v2z
+        // Clamp before acos: floating-point error can push a near-parallel or
+        // near-opposite pair's cosine fractionally outside [-1, 1], which
+        // would otherwise make acos return NaN for a perfectly valid angle.
+        val cosAngle = (dot / (v1Length * v2Length)).coerceIn(-1.0, 1.0)
+        return Math.toDegrees(acos(cosAngle))
+    }
+
+    /**
      * Deviation of the segment [a]->[b] from the vertical axis, in degrees
      * (0..90). 0 means perfectly vertical, 90 means horizontal.
      * Returns [Double.NaN] for a degenerate (zero-length) segment.
@@ -82,6 +131,29 @@ object KinematicCalculator {
         return Math.toDegrees(
             atan2(abs(deltaX), abs(deltaY)).toDouble()
         )
+    }
+
+    /**
+     * 3D generalization of [angleFromVertical]: deviation of the segment
+     * [a]->[b] from the vertical axis, in degrees (0..90), using MediaPipe's
+     * real-world (metric) [Landmark] coordinates. The vertical axis is the
+     * same one the world landmarks are estimated against (Y, matching the 2D
+     * image axis) -- valid as long as the phone is held reasonably level,
+     * exactly like the 2D version. Unlike the 2D version, this is not
+     * distorted by the subject's rotation around that vertical axis relative
+     * to the camera (e.g. not standing in an exact profile stance).
+     * Returns [Double.NaN] for a degenerate (zero-length) segment.
+     */
+    fun angleFromVertical3D(a: Landmark, b: Landmark): Double {
+        val deltaX = (a.x() - b.x()).toDouble()
+        val deltaY = (a.y() - b.y()).toDouble()
+        val deltaZ = (a.z() - b.z()).toDouble()
+
+        val length = sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ)
+        if (length == 0.0) return Double.NaN
+
+        val cosAngle = (abs(deltaY) / length).coerceIn(-1.0, 1.0)
+        return Math.toDegrees(acos(cosAngle))
     }
 
     /**

@@ -2,6 +2,7 @@ package com.example.fitvisor__demo.exercises
 
 import com.example.fitvisor__demo.model.ExerciseAnalysisResult
 import com.example.fitvisor__demo.model.OverlayMetrics
+import com.google.mediapipe.tasks.components.containers.Landmark
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
 /** Shown when the landmarks required for the exercise are not reliable enough. */
@@ -34,12 +35,17 @@ interface ExerciseAnalyzer {
      * @param imageWidth  width of the analyzed frame in pixels.
      * @param imageHeight height of the analyzed frame in pixels.
      * @param rawLandmarks raw MediaPipe output observed only by debug diagnostics.
+     * @param worldLandmarks MediaPipe's real-world (metric) 3D landmarks for
+     *   the same pose, when available (empty otherwise). Camera-angle-robust
+     *   alternative to [landmarks]'s 2D projection; most implementations
+     *   ignore it and stay purely 2D.
      */
     fun analyze(
         landmarks: List<NormalizedLandmark>,
         imageWidth: Int,
         imageHeight: Int,
-        rawLandmarks: List<NormalizedLandmark> = landmarks
+        rawLandmarks: List<NormalizedLandmark> = landmarks,
+        worldLandmarks: List<Landmark> = emptyList()
     ): ExerciseFrameOutput
 
     /** Clears any accumulated state so a fresh session starts clean. */
