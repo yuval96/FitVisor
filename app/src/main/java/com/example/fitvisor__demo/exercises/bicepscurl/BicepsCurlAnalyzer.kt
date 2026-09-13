@@ -12,7 +12,9 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * elbow angle (shoulder-elbow-wrist), torso inclination (shoulder-hip vs
  * vertical) and upper-arm-to-torso angle (how far the elbow swings from the body).
  */
-class BicepsCurlAnalyzer : SideViewAnalyzer() {
+class BicepsCurlAnalyzer(
+    poseQualityEnabled: () -> Boolean = { false }
+) : SideViewAnalyzer(poseQualityEnabled) {
 
     private val engine = BicepsCurlRuleEngine()
 

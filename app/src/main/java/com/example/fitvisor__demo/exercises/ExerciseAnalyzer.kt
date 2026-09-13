@@ -13,7 +13,9 @@ const val WARNING_BODY_NOT_VISIBLE = "Keep your body visible"
  */
 data class ExerciseFrameOutput(
     val result: ExerciseAnalysisResult,
-    val metrics: OverlayMetrics
+    val metrics: OverlayMetrics,
+    /** Present only while Debug Mode pose-quality measurement is enabled. */
+    val poseQuality: PoseQualityFrameSample? = null
 )
 
 /**
@@ -31,11 +33,13 @@ interface ExerciseAnalyzer {
      * @param landmarks smoothed, non-empty landmark list for the detected pose.
      * @param imageWidth  width of the analyzed frame in pixels.
      * @param imageHeight height of the analyzed frame in pixels.
+     * @param rawLandmarks raw MediaPipe output observed only by debug diagnostics.
      */
     fun analyze(
         landmarks: List<NormalizedLandmark>,
         imageWidth: Int,
-        imageHeight: Int
+        imageHeight: Int,
+        rawLandmarks: List<NormalizedLandmark> = landmarks
     ): ExerciseFrameOutput
 
     /** Clears any accumulated state so a fresh session starts clean. */

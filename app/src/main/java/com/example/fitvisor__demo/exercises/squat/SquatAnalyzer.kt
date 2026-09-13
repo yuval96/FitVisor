@@ -20,7 +20,9 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * needs knee/ankle/foot-index confidence, not the shoulder/hip/knee/ankle set
  * used for the primary knee/torso angles.
  */
-class SquatAnalyzer : SideViewAnalyzer() {
+class SquatAnalyzer(
+    poseQualityEnabled: () -> Boolean = { false }
+) : SideViewAnalyzer(poseQualityEnabled) {
 
     private val engine = SquatRuleEngine()
     private val kneeOverToeLegTracker = KneeOverToeLegTracker()

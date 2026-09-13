@@ -11,6 +11,13 @@ enum class PoseModel(val assetPath: String) {
     FULL("pose_landmarker_full.task"),
     HEAVY("pose_landmarker_heavy.task");
 
+    val displayName: String
+        get() = when (this) {
+            LITE -> "Lite"
+            FULL -> "Full"
+            HEAVY -> "Heavy"
+        }
+
     internal fun requireAsset(assetExists: (String) -> Boolean): String {
         check(assetExists(assetPath)) {
             "$name model asset ($assetPath) is missing or unreadable. Pose detection unavailable; no other model was substituted."
@@ -63,15 +70,10 @@ class AppSettings(context: Context) {
         set(value) {
             val editor = prefs.edit().putBoolean("debug_enabled", value)
             if (!value) {
-                editor.putBoolean("latency_enabled", false)
                 editor.putBoolean("test_reps_enabled", false)
             }
             editor.apply()
         }
-
-    var latencyEnabled: Boolean
-        get() = debugEnabled && prefs.getBoolean("latency_enabled", false)
-        set(value) { prefs.edit().putBoolean("latency_enabled", value && debugEnabled).apply() }
 
     var testRepsEnabled: Boolean
         get() = debugEnabled && prefs.getBoolean("test_reps_enabled", false)

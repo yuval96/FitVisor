@@ -22,6 +22,7 @@ enum class RepError(val message: String) {
 
     // Squat / Shoulder press torso lean.
     EXCESSIVE_TORSO_LEAN("Torso leaned too far forward"),
+    INSUFFICIENT_TORSO_LEAN("Torso did not lean forward enough"),
 
     // Push-up body linearity.
     BODY_NOT_STRAIGHT("Body alignment was not straight"),
@@ -37,5 +38,8 @@ enum class RepError(val message: String) {
     // Biceps curl.
     INCOMPLETE_CURL("Did not curl high enough"),
     EXCESSIVE_TORSO_MOVEMENT("Torso moved too much"),
-    EXCESSIVE_UPPER_ARM_MOVEMENT("Upper arm moved away from the body");
+    EXCESSIVE_UPPER_ARM_MOVEMENT("Upper arm moved away from the body"),
+
+    // Squat knee-over-toe.
+    KNEES_PASS_TOES("Knees traveled too far past the toes");
 }

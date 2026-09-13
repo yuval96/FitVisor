@@ -16,6 +16,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.example.fitvisor__demo.R
+import com.example.fitvisor__demo.audio.AudioFeedbackEvent
+import com.example.fitvisor__demo.audio.AudioFeedbackManager
 import com.example.fitvisor__demo.databinding.ActivityHomeBinding
 import com.example.fitvisor__demo.model.ExerciseType
 import com.example.fitvisor__demo.ui.BrandingInsets
@@ -33,6 +35,7 @@ class HomeActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHomeBinding
     private lateinit var repository: WorkoutHistoryRepository
+    private lateinit var audioFeedback: AudioFeedbackManager
 
     /** Exercise the user tapped, held while the camera permission is requested. */
     private var pendingExercise: ExerciseType = ExerciseType.SQUAT
@@ -51,6 +54,7 @@ class HomeActivity : AppCompatActivity() {
         binding = ActivityHomeBinding.inflate(layoutInflater)
         setContentView(binding.root)
         repository = WorkoutHistoryRepository.getInstance(applicationContext)
+        audioFeedback = AudioFeedbackManager(this)
 
         // Branded system bars + inset handling (edge-to-edge on Android 15+).
         BrandingInsets.applyNavySystemBars(this)
@@ -74,6 +78,7 @@ class HomeActivity : AppCompatActivity() {
         binding.finishWorkoutButton.setOnClickListener {
             val id = sessions.currentWorkout?.id ?: return@setOnClickListener
             val completed = sessions.finishWorkout(id) ?: return@setOnClickListener
+            audioFeedback.play(AudioFeedbackEvent.WORKOUT_COMPLETE)
             renderWorkout()
             lifecycleScope.launch {
                 repository.saveCompletedWorkout(completed)
@@ -173,6 +178,11 @@ class HomeActivity : AppCompatActivity() {
         outState.putString("pendingExercise", pendingExercise.name)
         outState.putString("pendingWorkoutId", pendingWorkoutId)
         super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroy() {
+        if (::audioFeedback.isInitialized) audioFeedback.close()
+        super.onDestroy()
     }
 
     private fun renderWorkout() {

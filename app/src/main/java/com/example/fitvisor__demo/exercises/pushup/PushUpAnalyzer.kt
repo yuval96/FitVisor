@@ -12,7 +12,9 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * body-line angle (shoulder-hip-ankle) and the hip-to-ankle tilt relative to
  * horizontal.
  */
-class PushUpAnalyzer : SideViewAnalyzer() {
+class PushUpAnalyzer(
+    poseQualityEnabled: () -> Boolean = { false }
+) : SideViewAnalyzer(poseQualityEnabled) {
 
     private val engine = PushUpRuleEngine()
 

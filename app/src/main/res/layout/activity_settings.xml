@@ -191,15 +191,113 @@
                     android:text="@string/debug_note" android:textColor="@color/text_secondary" />
                 <LinearLayout android:id="@+id/debugControls" android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:orientation="vertical" android:visibility="gone">
-                    <androidx.appcompat.widget.SwitchCompat android:id="@+id/latencySwitch"
-                        android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="56dp"
-                        android:text="@string/track_latency" android:textColor="@color/text_primary" />
-                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:text="@string/latency_note" android:textColor="@color/text_secondary" android:textSize="13sp" />
-                    <TextView android:id="@+id/latencyReport" android:layout_width="match_parent" android:layout_height="wrap_content"
-                        android:paddingVertical="12dp" android:textColor="@color/text_primary" android:textIsSelectable="true" />
-                    <Button android:id="@+id/resetLatency" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                        android:text="@string/reset_latency" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="@string/performance_metrics_title"
+                        android:textColor="@color/text_primary"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:id="@+id/performanceMetricsSection"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/bg_feedback_card"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:text="@string/performance_model" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/performanceModelValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:text="@string/performance_delegate" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/performanceDelegateValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:text="@string/performance_input_resolution" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/performanceResolutionValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="20dp"
+                            android:orientation="horizontal">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:text="@string/performance_camera_fps" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/performanceCameraFpsValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:text="@string/performance_analysis_fps" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/performanceAnalysisFpsValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="20dp"
+                            android:text="@string/performance_latency"
+                            android:textColor="@color/text_primary"
+                            android:textStyle="bold" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:text="@string/performance_current" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/performanceCurrentLatencyValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+                            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                                android:text="@string/performance_average" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/performanceAverageLatencyValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <include
+                        android:id="@+id/poseQualityPanel"
+                        layout="@layout/view_pose_quality" />
+
                     <include android:id="@+id/repTrackingPanel" layout="@layout/view_rep_tracking" />
                 </LinearLayout>
 

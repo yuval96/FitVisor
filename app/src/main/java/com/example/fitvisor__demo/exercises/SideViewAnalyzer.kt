@@ -16,7 +16,9 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * reset or miscounted because of one bad frame. Only after several consecutive
  * unreliable frames is the engine reset.
  */
-abstract class SideViewAnalyzer : ExerciseAnalyzer {
+abstract class SideViewAnalyzer(
+    private val poseQualityEnabled: () -> Boolean = { false }
+) : ExerciseAnalyzer {
 
     protected val sideSelector = SideSelector()
 
@@ -45,7 +47,8 @@ abstract class SideViewAnalyzer : ExerciseAnalyzer {
     final override fun analyze(
         landmarks: List<NormalizedLandmark>,
         imageWidth: Int,
-        imageHeight: Int
+        imageHeight: Int,
+        rawLandmarks: List<NormalizedLandmark>
     ): ExerciseFrameOutput {
 
         if (landmarks.size < LANDMARK_COUNT) {
@@ -55,28 +58,39 @@ abstract class SideViewAnalyzer : ExerciseAnalyzer {
         val left = leftLandmarks(landmarks)
         val right = rightLandmarks(landmarks)
 
-        val leftConfidence = LandmarkConfidence.minOfAll(*left.toTypedArray())
-        val rightConfidence = LandmarkConfidence.minOfAll(*right.toTypedArray())
+        val leftConfidence = LandmarkConfidence.minOfAll(left)
+        val rightConfidence = LandmarkConfidence.minOfAll(right)
 
         val side = sideSelector.select(leftConfidence, rightConfidence)
         val useLeft = side == SideSelector.Side.LEFT
         val selectedConfidence = if (useLeft) leftConfidence else rightConfidence
+        val poseQuality = if (poseQualityEnabled()) {
+            val rawSource = rawLandmarks.takeIf { it.size >= LANDMARK_COUNT } ?: landmarks
+            val rawSelectedLandmarks =
+                if (useLeft) leftLandmarks(rawSource) else rightLandmarks(rawSource)
+            PoseQualityMeasurement.measure(
+                selectionKey = "${javaClass.simpleName}:${side.name}",
+                requiredLandmarks = rawSelectedLandmarks
+            )
+        } else {
+            null
+        }
 
         if (selectedConfidence < SideSelector.MIN_SIDE_CONFIDENCE) {
             missingFrames++
             if (missingFrames > MAX_MISSING_FRAMES) {
                 resetEngine()
             }
-            return notVisible()
+            return notVisible(poseQuality)
         }
 
         missingFrames = 0
         val output = analyzeSide(useLeft, landmarks, imageWidth, imageHeight)
         lastPhase = output.result.phaseName
-        return output
+        return output.copy(poseQuality = poseQuality?.withAngles(output.metrics.values))
     }
 
-    private fun notVisible(): ExerciseFrameOutput {
+    private fun notVisible(poseQuality: PoseQualityFrameSample? = null): ExerciseFrameOutput {
         val result = ExerciseAnalysisResult(
             isRepCompleted = false,
             isRepCorrect = false,
@@ -85,7 +99,8 @@ abstract class SideViewAnalyzer : ExerciseAnalyzer {
         )
         return ExerciseFrameOutput(
             result,
-            OverlayMetrics(emptyMap(), WARNING_BODY_NOT_VISIBLE, lastPhase)
+            OverlayMetrics(emptyMap(), WARNING_BODY_NOT_VISIBLE, lastPhase),
+            poseQuality
         )
     }
 

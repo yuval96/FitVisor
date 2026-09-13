@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="20dp"
+        android:text="@string/pose_quality_title"
+        android:textColor="@color/text_primary"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_feedback_card"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:text="@string/pose_quality_current_visibility" android:textColor="@color/text_secondary" />
+            <TextView android:id="@+id/poseQualityCurrentVisibilityValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:text="@string/pose_quality_average_visibility" android:textColor="@color/text_secondary" />
+            <TextView android:id="@+id/poseQualityAverageVisibilityValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:text="@string/pose_quality_mean_landmark_jitter" android:textColor="@color/text_secondary" />
+            <TextView android:id="@+id/poseQualityMeanJitterValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:text="@string/pose_quality_angle_standard_deviation" android:textColor="@color/text_secondary" />
+            <TextView android:id="@+id/poseQualityAngleStandardDeviationValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:text="@string/pose_quality_minimum_visibility" android:textColor="@color/text_secondary" />
+            <TextView android:id="@+id/poseQualityMinimumVisibilityValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:text="@string/pose_quality_below_threshold_frames" android:textColor="@color/text_secondary" />
+            <TextView android:id="@+id/poseQualityBelowThresholdValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/performance_placeholder" android:textColor="@color/text_primary" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                android:text="@string/pose_quality_samples" android:textColor="@color/text_secondary" />
+            <TextView android:id="@+id/poseQualitySamplesValue" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="@string/pose_quality_zero_samples" android:textColor="@color/text_primary" android:textStyle="bold" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/resetPoseQualityStatistics"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/pose_quality_reset_statistics" />
+    </LinearLayout>
+</LinearLayout>

@@ -10,7 +10,7 @@ import org.junit.Test
 
 /**
  * Synthetic angle-sequence tests for [SquatRuleEngine].
- * Good torso = 10 deg (below the 45 deg limit); knee depth reached at <= 100.
+ * Good torso = 5 deg (within the 5..45 deg bottom-position range); knee depth reached at <= 110.
  * A torso value of 50 deg is above the 45 deg limit.
  */
 class SquatRuleEngineTest {
@@ -66,6 +66,70 @@ class SquatRuleEngineTest {
         assertTrue(end.isRepCompleted)
         assertFalse(end.isRepCorrect)
         assertTrue(end.errors.contains(RepError.EXCESSIVE_TORSO_LEAN))
+    }
+
+    @Test
+    fun singleInsufficientTorsoLeanFrame_doesNotInvalidateRep() {
+        feed(170.0, 20.0)
+        feed(140.0, 0.0)  // one violating descending frame
+        feed(90.0, 20.0)  // valid down frame resets the debounce
+        val end = feed(170.0, 20.0)
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertFalse(end.errors.contains(RepError.INSUFFICIENT_TORSO_LEAN))
+    }
+
+    @Test
+    fun twoConsecutiveInsufficientTorsoLeanFrames_invalidateRep() {
+        feed(170.0, 20.0)
+        feed(140.0, 0.0) // descending violation frame 1
+        feed(90.0, 0.0)  // down violation frame 2 -> trips
+        val end = feed(170.0, 20.0)
+
+        assertTrue(end.isRepCompleted)
+        assertFalse(end.isRepCorrect)
+        assertTrue(end.errors.contains(RepError.INSUFFICIENT_TORSO_LEAN))
+    }
+
+    @Test
+    fun minimumAndMaximumTorsoLeanUseIndependentDebounceGates() {
+        feed(170.0, 20.0)
+        feed(140.0, 50.0) // excessive frame 1
+        feed(90.0, 0.0)   // insufficient frame 1; neither may trip yet
+        feed(95.0, 20.0)  // valid torso resets both gates
+        val end = feed(170.0, 20.0)
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertTrue(end.errors.isEmpty())
+    }
+
+    @Test
+    fun fiveDegreesIsEnoughAndOnlyStandingIsExcluded() {
+        val standing = feed(170.0, 0.0)    // standing upright: ignored
+        val descending = feed(140.0, 0.0)  // descending: minimum lean applies
+        feed(120.0, 5.0)                   // exactly 5 deg is valid and resets the gate
+        feed(100.0, 5.0)                   // exactly 5 deg is also valid while down
+        feed(120.0, 0.0)                   // one violating DOWN/rising frame
+        val end = feed(170.0, 0.0)         // standing completion frame is excluded
+
+        assertEquals(null, standing.warning)
+        assertEquals("Lean slightly forward", descending.warning)
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertFalse(end.errors.contains(RepError.INSUFFICIENT_TORSO_LEAN))
+    }
+
+    @Test
+    fun tweakedStartAndDepthThresholdsAreApplied() {
+        feed(170.0, 20.0)
+        feed(155.0, 20.0) // below new 160 start threshold
+        feed(105.0, 20.0) // reaches new 110 depth threshold
+        val end = feed(160.0, 20.0)
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
     }
 
     @Test

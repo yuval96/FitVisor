@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.os.Bundle
 import android.os.SystemClock
-import android.os.Build
 import android.util.Log
 import android.view.View
 import android.widget.Toast
@@ -18,7 +17,13 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.example.fitvisor__demo.R
+import com.example.fitvisor__demo.audio.AudioFeedbackEvent
+import com.example.fitvisor__demo.audio.AudioFeedbackManager
 import com.example.fitvisor__demo.databinding.ActivityMainBinding
+import com.example.fitvisor__demo.debug.DebugSessionManager
+import com.example.fitvisor__demo.debug.DebugSessionState
+import com.example.fitvisor__demo.debug.DebugSessionTransition
+import com.example.fitvisor__demo.debug.DebugSessionUpdate
 import com.example.fitvisor__demo.exercises.ExerciseAnalyzer
 import com.example.fitvisor__demo.exercises.ExerciseFrameOutput
 import com.example.fitvisor__demo.exercises.bicepscurl.BicepsCurlAnalyzer
@@ -30,11 +35,13 @@ import com.example.fitvisor__demo.model.ExerciseType
 import com.example.fitvisor__demo.model.OverlayMetrics
 import com.example.fitvisor__demo.model.RepDebugMetrics
 import com.example.fitvisor__demo.pose.LandmarkSmoother
+import com.example.fitvisor__demo.pose.PendingFrameCache
 import com.example.fitvisor__demo.pose.PoseLandmarkerHelper
 import com.example.fitvisor__demo.settings.AnalysisConfig
 import com.example.fitvisor__demo.settings.AppSettings
 import com.example.fitvisor__demo.settings.DebugDataStore
 import com.example.fitvisor__demo.settings.LatencyTracker
+import com.example.fitvisor__demo.settings.PoseQualityTracker
 import com.example.fitvisor__demo.ui.BrandingInsets
 import com.example.fitvisor__demo.ui.home.HomeActivity
 import com.example.fitvisor__demo.ui.summary.SummaryActivity
@@ -62,10 +69,27 @@ class WorkoutActivity :
     private var exerciseSessionId = ""
     private lateinit var settings: AppSettings
     private lateinit var debugStore: DebugDataStore
+    private lateinit var audioFeedback: AudioFeedbackManager
     private val latencyTracker = LatencyTracker()
-    @Volatile private var measureLatency = false
+    private val poseQualityTracker = PoseQualityTracker()
+    private val debugSessionManager = DebugSessionManager()
+    private val measuredFrames = PendingFrameCache<Unit>(MEASURED_FRAME_WINDOW_MILLIS)
+    @Volatile private var measurePerformance = false
     @Volatile private var workoutVisible = false
     private val hideRepFeedback = Runnable { binding.repFeedback.visibility = View.GONE }
+    private val debugSessionTick = object : Runnable {
+        override fun run() {
+            if (!workoutVisible) return
+            val update = debugSessionManager.update()
+            handleDebugSessionUpdate(update)
+            if (
+                update.state == DebugSessionState.PREPARING ||
+                update.state == DebugSessionState.MEASURING
+            ) {
+                binding.debugSessionStatus.postDelayed(this, DEBUG_SESSION_TICK_MILLIS)
+            }
+        }
+    }
     private val timerTick = object : Runnable {
         override fun run() {
             val seconds = sessions.currentExercise?.takeIf { it.id == exerciseSessionId }?.durationSeconds ?: 0L
@@ -80,6 +104,9 @@ class WorkoutActivity :
 
     companion object {
         const val EXTRA_EXERCISE_SESSION_ID = "EXERCISE_SESSION_ID"
+        private const val DEBUG_SESSION_TICK_MILLIS = 200L
+        private const val MEASURED_FRAME_WINDOW_MILLIS = 5_000L
+        private const val MILLIS_PER_SECOND = 1_000L
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,6 +117,7 @@ class WorkoutActivity :
         BrandingInsets.padForSystemBars(binding.root)
         settings = AppSettings(this)
         debugStore = DebugDataStore(this)
+        audioFeedback = AudioFeedbackManager(this)
 
         exerciseSessionId = intent.getStringExtra(EXTRA_EXERCISE_SESSION_ID) ?: ""
         val session = sessions.currentExercise?.takeIf { it.id == exerciseSessionId }
@@ -133,10 +161,13 @@ class WorkoutActivity :
 
     private fun createAnalyzer(type: ExerciseType): ExerciseAnalyzer =
         when (type) {
-            ExerciseType.SQUAT -> SquatAnalyzer()
-            ExerciseType.PUSH_UP -> PushUpAnalyzer()
-            ExerciseType.SHOULDER_PRESS -> ShoulderPressAnalyzer { settings.debugEnabled }
-            ExerciseType.BICEPS_CURL -> BicepsCurlAnalyzer()
+            ExerciseType.SQUAT -> SquatAnalyzer { measurePerformance }
+            ExerciseType.PUSH_UP -> PushUpAnalyzer { measurePerformance }
+            ExerciseType.SHOULDER_PRESS -> ShoulderPressAnalyzer(
+                debugEnabled = { measurePerformance },
+                poseQualityEnabled = { measurePerformance }
+            )
+            ExerciseType.BICEPS_CURL -> BicepsCurlAnalyzer { measurePerformance }
         }
 
     private fun startCamera() {
@@ -171,7 +202,10 @@ class WorkoutActivity :
                             imageProxy.close()
                             return@setAnalyzer
                         }
-                        val measurementStart = if (measureLatency) SystemClock.elapsedRealtimeNanos() else null
+                        val measurementStart = if (measurePerformance) SystemClock.elapsedRealtimeNanos() else null
+                        if (measurementStart != null) {
+                            latencyTracker.cameraFrame(measurementStart, imageProxy.width, imageProxy.height)
+                        }
                         try {
                             val frameTimeNanos =
                                 imageProxy.imageInfo.timestamp
@@ -206,8 +240,9 @@ class WorkoutActivity :
                                 BitmapImageBuilder(rotatedBitmap)
                                     .build()
 
-                            if (measurementStart != null && measureLatency) {
+                            if (measurementStart != null && measurePerformance) {
                                 latencyTracker.submit(frameTimeMillis, measurementStart, SystemClock.elapsedRealtimeNanos())
+                                measuredFrames.put(frameTimeMillis, Unit)
                             }
                             poseLandmarkerHelper.detectLiveStream(
                                 frameTimeMillis,
@@ -215,6 +250,9 @@ class WorkoutActivity :
                                 rotatedBitmap
                             )
                         } catch (exception: Exception) {
+                            measuredFrames.remove(
+                                TimeUnit.NANOSECONDS.toMillis(imageProxy.imageInfo.timestamp)
+                            )
                             Log.e(
                                 "WorkoutActivity",
                                 "Failed to analyze camera frame",
@@ -254,9 +292,16 @@ class WorkoutActivity :
         imageHeight: Int,
         imageWidth: Int
     ) {
-        val callbackTime = if (measureLatency) SystemClock.elapsedRealtimeNanos() else 0L
+        val measurementFrame =
+            measuredFrames.take(result.timestampMs()) != null && measurePerformance && workoutVisible
+        val callbackTime = if (measurementFrame) {
+            SystemClock.elapsedRealtimeNanos().also(latencyTracker::analysisResult)
+        } else {
+            0L
+        }
         runOnUiThread {
             if (!workoutVisible || sessions.currentExerciseId != exerciseSessionId) return@runOnUiThread
+            var debugUpdateAfterFrame: DebugSessionUpdate? = null
             val rawLandmarks =
                 result.landmarks().firstOrNull()
 
@@ -270,7 +315,8 @@ class WorkoutActivity :
                     analyzer.analyze(
                         smoothedLandmarks,
                         imageWidth,
-                        imageHeight
+                        imageHeight,
+                        rawLandmarks
                     )
                 } else {
                     ExerciseFrameOutput(
@@ -284,6 +330,10 @@ class WorkoutActivity :
                     )
                 }
 
+            if (measurementFrame && measurePerformance) {
+                output.poseQuality?.let(poseQualityTracker::add)
+            }
+
             if (output.result.isRepCompleted) {
                 val recorded = sessions.recordRep(
                     exerciseId = exerciseSessionId,
@@ -292,9 +342,31 @@ class WorkoutActivity :
                     debugMetrics = output.result.debugMetrics ?: RepDebugMetrics.EMPTY
                 )
                 if (recorded != null) {
-                    debugStore.recordRep(exerciseType, output.result.isRepCorrect)
+                    val isDebugMeasurementRep =
+                        measurementFrame && debugSessionManager.state == DebugSessionState.MEASURING
+                    if (isDebugMeasurementRep) {
+                        debugStore.recordRep(exerciseType, output.result.isRepCorrect)
+                    }
                     updateRepCounter()
                     showRepFeedback(output.result.isRepCorrect)
+                    audioFeedback.play(
+                        if (output.result.isRepCorrect) {
+                            AudioFeedbackEvent.REP_CORRECT
+                        } else {
+                            AudioFeedbackEvent.REP_INCORRECT
+                        }
+                    )
+                    if (isDebugMeasurementRep) {
+                        val debugUpdate = debugSessionManager.recordCompletedRepetition()
+                        if (debugUpdate.transition == DebugSessionTransition.MEASUREMENT_COMPLETED) {
+                            // Stop new samples immediately, then include this completing
+                            // frame's final latency sample before persisting the snapshot.
+                            measurePerformance = false
+                            debugUpdateAfterFrame = debugUpdate
+                        } else {
+                            handleDebugSessionUpdate(debugUpdate)
+                        }
+                    }
                 }
             }
 
@@ -308,9 +380,10 @@ class WorkoutActivity :
             val warning = output.metrics.warning?.takeIf { it.isNotBlank() }
             binding.correctionFeedback.text = warning
             binding.correctionFeedback.visibility = if (warning == null) View.GONE else View.VISIBLE
-            if (measureLatency && callbackTime != 0L) {
+            if (measurementFrame && callbackTime != 0L) {
                 latencyTracker.complete(result.timestampMs(), callbackTime, SystemClock.elapsedRealtimeNanos())
             }
+            debugUpdateAfterFrame?.let(::handleDebugSessionUpdate)
         }
     }
 
@@ -338,9 +411,90 @@ class WorkoutActivity :
     }
 
     private fun finishExercise() {
+        if (settings.debugEnabled) {
+            handleDebugSessionUpdate(debugSessionManager.update())
+        }
         workoutVisible = false
         sessions.finishExercise(exerciseSessionId)
         returnToSelection()
+    }
+
+    private fun startDebugSessionIfEnabled() {
+        binding.debugSessionStatus.removeCallbacks(debugSessionTick)
+        measurePerformance = false
+        measuredFrames.clear()
+        latencyTracker.reset()
+        poseQualityTracker.reset()
+        debugSessionManager.reset()
+
+        if (!settings.debugEnabled) {
+            binding.debugSessionStatus.visibility = View.GONE
+            return
+        }
+
+        handleDebugSessionUpdate(debugSessionManager.start())
+        binding.debugSessionStatus.postDelayed(debugSessionTick, DEBUG_SESSION_TICK_MILLIS)
+    }
+
+    private fun handleDebugSessionUpdate(update: DebugSessionUpdate) {
+        when (update.transition) {
+            DebugSessionTransition.MEASUREMENT_STARTED -> startDebugMeasurement()
+            DebugSessionTransition.MEASUREMENT_COMPLETED -> completeDebugMeasurement()
+            DebugSessionTransition.NONE -> Unit
+        }
+        renderDebugSessionStatus(update)
+    }
+
+    private fun startDebugMeasurement() {
+        // The persistent results are invalidated at the exact start of the new
+        // measurement, not during the five-second preparation window.
+        measurePerformance = false
+        measuredFrames.clear()
+        latencyTracker.reset()
+        poseQualityTracker.reset()
+        debugStore.resetPerformanceMetrics()
+        debugStore.resetPoseQualityMetrics()
+        measurePerformance = true
+    }
+
+    private fun completeDebugMeasurement() {
+        measurePerformance = false
+        measuredFrames.clear()
+        latencyTracker.clearPending()
+        debugStore.savePerformanceMetrics(
+            latencyTracker.snapshot(
+                model = poseLandmarkerHelper.selectedModel.displayName,
+                delegate = poseLandmarkerHelper.activeDelegate?.name,
+                configuredUseGpu = poseLandmarkerHelper.requestedGpu,
+                timestampNanos = SystemClock.elapsedRealtimeNanos()
+            )
+        )
+        debugStore.savePoseQualityMetrics(poseQualityTracker.snapshot())
+        audioFeedback.play(AudioFeedbackEvent.WORKOUT_COMPLETE)
+    }
+
+    private fun renderDebugSessionStatus(update: DebugSessionUpdate) {
+        val text = when (update.state) {
+            DebugSessionState.IDLE -> null
+            DebugSessionState.PREPARING -> getString(
+                R.string.debug_measurement_starts_in,
+                update.preparationSecondsRemaining ?: 1
+            )
+            DebugSessionState.MEASURING -> getString(
+                R.string.debug_measurement_in_progress,
+                update.measurementElapsedMillis / MILLIS_PER_SECOND,
+                update.completedRepetitions
+            )
+            DebugSessionState.COMPLETED -> getString(
+                R.string.debug_measurement_completed,
+                update.measurementElapsedMillis / MILLIS_PER_SECOND,
+                update.completedRepetitions
+            )
+        }
+        binding.debugSessionStatus.visibility = if (text == null) View.GONE else View.VISIBLE
+        if (text != null && binding.debugSessionStatus.text.toString() != text) {
+            binding.debugSessionStatus.text = text
+        }
     }
 
     private fun returnToSelection() {
@@ -359,8 +513,8 @@ class WorkoutActivity :
         sessions.resumeExercise(exerciseSessionId)
         binding.overlayView.setDebugEnabled(settings.debugEnabled)
         binding.overlayView.setShowSkeleton(settings.showSkeleton)
-        measureLatency = settings.latencyEnabled
         workoutVisible = true
+        startDebugSessionIfEnabled()
         binding.workoutTimer.removeCallbacks(timerTick)
         timerTick.run()
     }
@@ -369,14 +523,13 @@ class WorkoutActivity :
         workoutVisible = false
         sessions.pauseExercise(exerciseSessionId)
         binding.workoutTimer.removeCallbacks(timerTick)
+        binding.debugSessionStatus.removeCallbacks(debugSessionTick)
         binding.repFeedback.removeCallbacks(hideRepFeedback)
         binding.repFeedback.visibility = View.GONE
-        if (measureLatency) {
-            debugStore.saveLatency("${Build.MANUFACTURER} ${Build.MODEL} · Android ${Build.VERSION.RELEASE}\n" +
-                "${exerciseType.displayName} · ${poseLandmarkerHelper.runtimeDescription}\n" +
-                "Saved ${java.text.DateFormat.getDateTimeInstance().format(java.util.Date())}\n\n" + latencyTracker.report())
-        }
-        measureLatency = false
+        measurePerformance = false
+        measuredFrames.clear()
+        debugSessionManager.reset()
+        binding.debugSessionStatus.visibility = View.GONE
         latencyTracker.clearPending()
         // Do not join half a movement before backgrounding to one after resuming.
         if (::analyzer.isInitialized) analyzer.reset()
@@ -396,6 +549,7 @@ class WorkoutActivity :
 
         landmarkSmoother.reset()
         if (::analyzer.isInitialized) analyzer.reset()
+        if (::audioFeedback.isInitialized) audioFeedback.close()
 
         if (::cameraExecutor.isInitialized) {
             // Wait behind submitted frames before releasing this exercise's detector.
@@ -403,4 +557,5 @@ class WorkoutActivity :
             cameraExecutor.shutdown()
         }
     }
+
 }

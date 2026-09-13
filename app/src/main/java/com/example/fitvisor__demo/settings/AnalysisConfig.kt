@@ -20,7 +20,7 @@ object AnalysisConfig {
      * reported on-device. To A/B test, change only this constant (e.g. try
      * 1.0, 0.9, 0.8).
      */
-    const val LANDMARK_SMOOTHING_ALPHA = 1.0f
+    const val LANDMARK_SMOOTHING_ALPHA = 0.9f
 
     /**
      * When true, each rule engine records a per-frame trace of phase + metrics

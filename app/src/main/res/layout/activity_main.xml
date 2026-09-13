@@ -116,6 +116,24 @@
         app:layout_constraintStart_toStartOf="@id/repCounter"
         app:layout_constraintTop_toBottomOf="@id/repCounter" />
 
+    <TextView
+        android:id="@+id/debugSessionStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:accessibilityLiveRegion="polite"
+        android:background="@drawable/bg_live_feedback"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:textColor="@android:color/white"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="@id/workoutTimer"
+        app:layout_constraintTop_toBottomOf="@id/workoutTimer"
+        tools:text="Debug measurement starts in: 5"
+        tools:visibility="visible" />
+
     <TextView android:id="@+id/correctionFeedback"
         android:layout_width="0dp" android:layout_height="wrap_content"
         android:layout_marginHorizontal="20dp" android:layout_marginBottom="24dp"

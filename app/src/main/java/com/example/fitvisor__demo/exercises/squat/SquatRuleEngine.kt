@@ -18,21 +18,22 @@ import com.example.fitvisor__demo.utils.ConsecutiveGate
  *  - A technique violation during a rep is latched until the rep ends; a later
  *    correct frame never erases an earlier error.
  *
- * Torso-lean stability change: an excessive torso lean must persist for
- * [ConsecutiveGate.requiredFrames] consecutive analyzed frames before it
- * invalidates the repetition, so a single noisy frame above the limit no longer
- * fails the rep. The live "Keep your back straighter" cue still shows on any
- * frame above the limit. The torso-inclination threshold itself is applied
- * unchanged by this debounce (currently 45 degrees).
+ * Excessive and insufficient torso lean are checked throughout both active
+ * repetition phases: [State.DESCENDING] and [State.DOWN]. A violation in either
+ * direction must persist for [ConsecutiveGate.requiredFrames] consecutive
+ * frames before it invalidates the repetition, so one noisy frame does not fail
+ * the rep. Standing frames do not participate in the minimum-lean check.
  */
 class SquatRuleEngine {
 
     companion object {
-        private const val REP_START_THRESHOLD = 150.0
-        private const val SQUAT_DOWN_THRESHOLD = 100.0
+        private const val REP_START_THRESHOLD = 160.0
+        private const val SQUAT_DOWN_THRESHOLD = 110.0
         private const val SQUAT_UP_THRESHOLD = 160.0
-        // Maximum allowed torso inclination from vertical (raised 35 -> 45).
-        private const val TORSO_INCLINATION_LIMIT = 45.0
+        private const val MIN_TORSO_INCLINATION = 5.0
+        private const val MAX_TORSO_INCLINATION = 45.0
+
+        private const val KNEE_TOE_OFFSET_LIMIT = 0.2
     }
 
     enum class State {
@@ -54,8 +55,17 @@ class SquatRuleEngine {
      */
     val phaseName: String get() = currentState.name
 
-    /** Torso lean must persist for 2 consecutive frames before it invalidates. */
-    private val torsoGate = ConsecutiveGate()
+    /** Each torso boundary has an independent two-frame debounce. */
+    private val excessiveTorsoLeanGate = ConsecutiveGate()
+    private val insufficientTorsoLeanGate = ConsecutiveGate()
+
+    /**
+     * Knee-past-toe must persist for 2 consecutive frames before it invalidates,
+     * using the same debounce duration as the torso checks. Named distinctly
+     * from the [processFrame] `kneeOverToe` parameter so the two are never
+     * confused.
+     */
+    private val kneeOverToeGate = ConsecutiveGate()
 
     private val errors = linkedSetOf<RepError>()
     private val frameRecorder = RepFrameRecorder()
@@ -84,14 +94,14 @@ class SquatRuleEngine {
         var isRepCompleted = false
         var isRepCorrect = false
 
-        val torsoIssue = torsoAngle > TORSO_INCLINATION_LIMIT
-
-        // Live corrective cue (preserved): shows immediately on a single frame.
-        var warning: String? = when {
-            torsoIssue -> "Keep your back straighter"
-            kneeMisaligned -> "Check knee alignment"
-            else -> null
-        }
+        val excessiveTorsoLean =
+            !torsoAngle.isNaN() && torsoAngle > MAX_TORSO_INCLINATION
+        val insufficientTorsoLean =
+            !torsoAngle.isNaN() && torsoAngle < MIN_TORSO_INCLINATION
+        val kneeOverToeIssue =
+            kneeOverToe != null &&
+                !kneeOverToe.normalizedKneeToeOffset.isNaN() &&
+                kneeOverToe.normalizedKneeToeOffset > KNEE_TOE_OFFSET_LIMIT
 
         /*
          * A repetition starts when the user clearly leaves the standing
@@ -103,6 +113,22 @@ class SquatRuleEngine {
         ) {
             beginRep()
             currentState = State.DESCENDING
+        }
+
+        val minimumLeanCheckActive =
+            repInProgress &&
+                !kneeAngle.isNaN() &&
+                kneeAngle < SQUAT_UP_THRESHOLD &&
+                (currentState == State.DESCENDING || currentState == State.DOWN)
+
+        // Live corrective cues show immediately, but minimum lean is irrelevant
+        // while the user is standing outside an active repetition.
+        var warning: String? = when {
+            excessiveTorsoLean -> "Keep your back straighter"
+            minimumLeanCheckActive && insufficientTorsoLean -> "Lean slightly forward"
+            kneeMisaligned -> "Check knee alignment"
+            kneeOverToeIssue -> "Knees are past toes"
+            else -> null
         }
 
         /*
@@ -117,9 +143,22 @@ class SquatRuleEngine {
                 linkedMapOf("knee" to kneeAngle, "torso" to torsoAngle)
             }
 
-            if (torsoGate.update(torsoIssue)) {
+            if (excessiveTorsoLeanGate.update(excessiveTorsoLean)) {
                 techniqueValid = false
                 errors.add(RepError.EXCESSIVE_TORSO_LEAN)
+            }
+
+            if (insufficientTorsoLeanGate.update(
+                    minimumLeanCheckActive && insufficientTorsoLean
+                )
+            ) {
+                techniqueValid = false
+                errors.add(RepError.INSUFFICIENT_TORSO_LEAN)
+            }
+
+            if (kneeOverToeGate.update(kneeOverToeIssue)) {
+                techniqueValid = false
+                errors.add(RepError.KNEES_PASS_TOES)
             }
 
             if (!reachedRequiredDepth && warning == null) {
@@ -219,7 +258,9 @@ class SquatRuleEngine {
         repInProgress = true
         reachedRequiredDepth = false
         techniqueValid = true
-        torsoGate.reset()
+        excessiveTorsoLeanGate.reset()
+        insufficientTorsoLeanGate.reset()
+        kneeOverToeGate.reset()
         errors.clear()
         frameRecorder.reset()
         minKnee = Double.NaN
@@ -238,7 +279,9 @@ class SquatRuleEngine {
         repInProgress = false
         reachedRequiredDepth = false
         techniqueValid = true
-        torsoGate.reset()
+        excessiveTorsoLeanGate.reset()
+        insufficientTorsoLeanGate.reset()
+        kneeOverToeGate.reset()
     }
 
     fun reset() {
@@ -246,7 +289,9 @@ class SquatRuleEngine {
         repInProgress = false
         reachedRequiredDepth = false
         techniqueValid = true
-        torsoGate.reset()
+        excessiveTorsoLeanGate.reset()
+        insufficientTorsoLeanGate.reset()
+        kneeOverToeGate.reset()
         errors.clear()
         frameRecorder.reset()
         minKnee = Double.NaN

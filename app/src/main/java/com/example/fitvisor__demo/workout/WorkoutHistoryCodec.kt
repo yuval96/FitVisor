@@ -13,7 +13,15 @@ object WorkoutHistoryCodec {
 
     fun decodeErrors(raw: String): List<RepError> =
         if (raw.isEmpty()) emptyList()
-        else raw.split(",").map { RepError.valueOf(it) }
+        else raw.split(",").map {
+            // Compatibility with the briefly-used names from the torso-range
+            // implementation, as well as the original persisted enum name.
+            when (it) {
+                "EXCESSIVE_TORSO_LEAN_FWD" -> RepError.EXCESSIVE_TORSO_LEAN
+                "EXCESSIVE_TORSO_LEAN_BWD" -> RepError.INSUFFICIENT_TORSO_LEAN
+                else -> RepError.valueOf(it)
+            }
+        }
 
     fun encodeMetrics(values: Map<String, Double>): String =
         values.entries.joinToString(",") { (key, value) -> "$key=$value" }

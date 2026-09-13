@@ -19,6 +19,12 @@ class PoseLandmarkerHelper(
     private var poseLandmarker: PoseLandmarker? = null
     var runtimeDescription: String = "Detector unavailable"
         private set
+    lateinit var selectedModel: com.example.fitvisor__demo.settings.PoseModel
+        private set
+    var requestedGpu: Boolean = false
+        private set
+    var activeDelegate: Delegate? = null
+        private set
 
     /**
      * The exact bitmap submitted to [detectLiveStream], keyed by the same
@@ -48,6 +54,7 @@ class PoseLandmarkerHelper(
         val settings = AppSettings(context)
 
         val requestedModel = settings.model
+        selectedModel = requestedModel
         runtimeDescription = "${requestedModel.assetPath} · unavailable"
         val assetPath = try {
             requestedModel.requireAsset(::assetExists)
@@ -57,6 +64,7 @@ class PoseLandmarkerHelper(
         }
 
         val useGpu = settings.useGpu
+        requestedGpu = useGpu
         try {
             poseLandmarker = createLandmarker(
                 assetPath,
@@ -91,6 +99,7 @@ class PoseLandmarkerHelper(
             .setErrorListener(this::onError)
             .build()
         return PoseLandmarker.createFromOptions(context, options).also {
+            activeDelegate = delegate
             runtimeDescription = "$assetPath · $delegate"
             Log.i("PoseLandmarkerHelper", "Loaded $runtimeDescription")
         }
@@ -129,6 +138,7 @@ class PoseLandmarkerHelper(
     fun close() {
         poseLandmarker?.close()
         poseLandmarker = null
+        activeDelegate = null
         pendingFrames.clear()
     }
 

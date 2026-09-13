@@ -3,6 +3,7 @@ package com.example.fitvisor__demo.exercises.shoulderpress
 import android.util.Log
 import com.example.fitvisor__demo.exercises.ExerciseAnalyzer
 import com.example.fitvisor__demo.exercises.ExerciseFrameOutput
+import com.example.fitvisor__demo.exercises.PoseQualityMeasurement
 import com.example.fitvisor__demo.exercises.WARNING_BODY_NOT_VISIBLE
 import com.example.fitvisor__demo.kinematics.KinematicCalculator
 import com.example.fitvisor__demo.model.ExerciseAnalysisResult
@@ -27,7 +28,10 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * temporary Logcat debug (per-side angles, phase, failing rule and per-rep
  * min/max ranges) for on-device threshold tuning. See that flag's doc.
  */
-class ShoulderPressAnalyzer(private val debugEnabled: () -> Boolean = { false }) : ExerciseAnalyzer {
+class ShoulderPressAnalyzer(
+    private val debugEnabled: () -> Boolean = { false },
+    private val poseQualityEnabled: () -> Boolean = debugEnabled
+) : ExerciseAnalyzer {
 
     private val engine = ShoulderPressRuleEngine()
 
@@ -42,25 +46,18 @@ class ShoulderPressAnalyzer(private val debugEnabled: () -> Boolean = { false })
     override fun analyze(
         landmarks: List<NormalizedLandmark>,
         imageWidth: Int,
-        imageHeight: Int
+        imageHeight: Int,
+        rawLandmarks: List<NormalizedLandmark>
     ): ExerciseFrameOutput {
 
         if (landmarks.size < LANDMARK_COUNT) {
             return notVisible()
         }
 
-        val leftConfidence = LandmarkConfidence.minOfAll(
-            landmarks[PoseLandmarkIndices.L_SH],
-            landmarks[PoseLandmarkIndices.L_ELBOW],
-            landmarks[PoseLandmarkIndices.L_WRIST],
-            landmarks[PoseLandmarkIndices.L_HIP]
-        )
-        val rightConfidence = LandmarkConfidence.minOfAll(
-            landmarks[PoseLandmarkIndices.R_SH],
-            landmarks[PoseLandmarkIndices.R_ELBOW],
-            landmarks[PoseLandmarkIndices.R_WRIST],
-            landmarks[PoseLandmarkIndices.R_HIP]
-        )
+        val leftLandmarks = armLandmarks(landmarks, useLeft = true)
+        val rightLandmarks = armLandmarks(landmarks, useLeft = false)
+        val leftConfidence = LandmarkConfidence.minOfAll(leftLandmarks)
+        val rightConfidence = LandmarkConfidence.minOfAll(rightLandmarks)
 
         val leftReliable = leftConfidence >= SideSelector.MIN_SIDE_CONFIDENCE
         val rightReliable = rightConfidence >= SideSelector.MIN_SIDE_CONFIDENCE
@@ -75,12 +72,35 @@ class ShoulderPressAnalyzer(private val debugEnabled: () -> Boolean = { false })
         }
         missingFrames = 0
 
+        val diagnosticsEnabled = debugEnabled()
+        val poseQuality = if (poseQualityEnabled()) {
+            val rawSource = rawLandmarks.takeIf { it.size >= LANDMARK_COUNT } ?: landmarks
+            val rawLeftLandmarks = armLandmarks(rawSource, useLeft = true)
+            val rawRightLandmarks = armLandmarks(rawSource, useLeft = false)
+            val requiredLandmarks = when {
+                leftReliable && rightReliable -> rawLeftLandmarks + rawRightLandmarks
+                leftReliable -> rawLeftLandmarks
+                else -> rawRightLandmarks
+            }
+            val selectionKey = when {
+                leftReliable && rightReliable -> "BOTH"
+                leftReliable -> "LEFT"
+                else -> "RIGHT"
+            }
+            PoseQualityMeasurement.measure(
+                selectionKey = "${javaClass.simpleName}:$selectionKey",
+                requiredLandmarks = requiredLandmarks
+            )
+        } else {
+            null
+        }
+
         // Per-arm metrics for whichever arm(s) are reliable; kept separate for
         // debug, then averaged into the single values the rule engine consumes.
         val leftMetrics =
-            if (leftReliable) armMetrics(landmarks, true, imageWidth, imageHeight) else null
+            if (leftReliable) armMetrics(leftLandmarks, imageWidth, imageHeight) else null
         val rightMetrics =
-            if (rightReliable) armMetrics(landmarks, false, imageWidth, imageHeight) else null
+            if (rightReliable) armMetrics(rightLandmarks, imageWidth, imageHeight) else null
 
         val elbow = Averager()
         val upperArm = Averager()
@@ -110,7 +130,7 @@ class ShoulderPressAnalyzer(private val debugEnabled: () -> Boolean = { false })
         )
         lastPhase = result.phaseName
 
-        if (debugEnabled()) {
+        if (diagnosticsEnabled) {
             logDebug(leftMetrics, rightMetrics, result)
         }
 
@@ -123,19 +143,28 @@ class ShoulderPressAnalyzer(private val debugEnabled: () -> Boolean = { false })
             warning = result.warning,
             phase = result.phaseName
         )
-        return ExerciseFrameOutput(result, metrics)
+        return ExerciseFrameOutput(result, metrics, poseQuality?.withAngles(metrics.values))
     }
 
-    private fun armMetrics(
+    private fun armLandmarks(
         landmarks: List<NormalizedLandmark>,
-        useLeft: Boolean,
+        useLeft: Boolean
+    ): List<NormalizedLandmark> = listOf(
+        landmarks[if (useLeft) PoseLandmarkIndices.L_SH else PoseLandmarkIndices.R_SH],
+        landmarks[if (useLeft) PoseLandmarkIndices.L_ELBOW else PoseLandmarkIndices.R_ELBOW],
+        landmarks[if (useLeft) PoseLandmarkIndices.L_WRIST else PoseLandmarkIndices.R_WRIST],
+        landmarks[if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP]
+    )
+
+    private fun armMetrics(
+        requiredLandmarks: List<NormalizedLandmark>,
         imageWidth: Int,
         imageHeight: Int
     ): ArmMetrics {
-        val sh = landmarks[if (useLeft) PoseLandmarkIndices.L_SH else PoseLandmarkIndices.R_SH]
-        val el = landmarks[if (useLeft) PoseLandmarkIndices.L_ELBOW else PoseLandmarkIndices.R_ELBOW]
-        val wr = landmarks[if (useLeft) PoseLandmarkIndices.L_WRIST else PoseLandmarkIndices.R_WRIST]
-        val hip = landmarks[if (useLeft) PoseLandmarkIndices.L_HIP else PoseLandmarkIndices.R_HIP]
+        val sh = requiredLandmarks[0]
+        val el = requiredLandmarks[1]
+        val wr = requiredLandmarks[2]
+        val hip = requiredLandmarks[3]
 
         return ArmMetrics(
             elbow = KinematicCalculator.calculateAngle(sh, el, wr, imageWidth, imageHeight),

@@ -3,12 +3,48 @@ package com.example.fitvisor__demo.settings
 import java.util.Locale
 import kotlin.math.ceil
 
-/** Bounded measurements using one monotonic clock, never camera sensor time. */
-class LatencyTracker(private val capacity: Int = 600) {
+data class PerformanceMetricsSnapshot(
+    val model: String,
+    val delegate: String?,
+    val configuredUseGpu: Boolean,
+    val inputWidth: Int?,
+    val inputHeight: Int?,
+    val cameraFps: Double?,
+    val analysisFps: Double?,
+    val currentLatencyMs: Double?,
+    val averageLatencyMs: Double?
+)
+
+/**
+ * Bounded performance measurements using one monotonic clock, never camera
+ * sensor time. The existing timestamp-matched latency instrumentation is also
+ * the owner of the two lightweight FPS windows so the app has one metrics path.
+ */
+class LatencyTracker(
+    private val capacity: Int = 600,
+    private val fpsWindowNanos: Long = FPS_WINDOW_NANOS,
+    private val minimumFpsSpanNanos: Long = MINIMUM_FPS_SPAN_NANOS
+) {
     data class Frame(val start: Long, val submitted: Long)
     data class Sample(val preparation: Double, val model: Double, val ui: Double, val total: Double)
     private val pending = linkedMapOf<Long, Frame>()
     private val samples = ArrayDeque<Sample>()
+    private val cameraFrames = TimestampWindow(FPS_TIMESTAMP_CAPACITY)
+    private val analysisResults = TimestampWindow(FPS_TIMESTAMP_CAPACITY)
+    private var inputWidth: Int? = null
+    private var inputHeight: Int? = null
+
+    /** Records an ImageProxy as soon as ImageAnalysis delivers it. */
+    @Synchronized fun cameraFrame(timestampNanos: Long, width: Int, height: Int) {
+        cameraFrames.add(timestampNanos)
+        inputWidth = width
+        inputHeight = height
+    }
+
+    /** Records a completed MediaPipe LIVE_STREAM result on its callback thread. */
+    @Synchronized fun analysisResult(timestampNanos: Long) {
+        analysisResults.add(timestampNanos)
+    }
 
     @Synchronized fun submit(id: Long, start: Long, submitted: Long) {
         pending[id] = Frame(start, submitted)
@@ -31,6 +67,34 @@ class LatencyTracker(private val capacity: Int = 600) {
 
     @Synchronized fun clearPending() { pending.clear() }
 
+    @Synchronized fun reset() {
+        pending.clear()
+        samples.clear()
+        cameraFrames.clear()
+        analysisResults.clear()
+        inputWidth = null
+        inputHeight = null
+    }
+
+    @Synchronized fun snapshot(
+        model: String,
+        delegate: String?,
+        configuredUseGpu: Boolean,
+        timestampNanos: Long
+    ): PerformanceMetricsSnapshot = PerformanceMetricsSnapshot(
+        model = model,
+        delegate = delegate,
+        configuredUseGpu = configuredUseGpu,
+        inputWidth = inputWidth,
+        inputHeight = inputHeight,
+        cameraFps = cameraFrames.fps(timestampNanos, fpsWindowNanos, minimumFpsSpanNanos),
+        analysisFps = analysisResults.fps(timestampNanos, fpsWindowNanos, minimumFpsSpanNanos),
+        currentLatencyMs = samples.lastOrNull()?.total,
+        averageLatencyMs = samples.takeIf { it.isNotEmpty() }?.let { values ->
+            values.sumOf { it.total } / values.size
+        }
+    )
+
     @Synchronized fun report(): String {
         if (samples.isEmpty()) return "No completed frame measurements yet."
         fun line(name: String, values: List<Double>): String {
@@ -44,5 +108,51 @@ class LatencyTracker(private val capacity: Int = 600) {
             line("UI queue + analysis", samples.map { it.ui }),
             line("Total to UI update", samples.map { it.total })
         ).joinToString("\n")
+    }
+
+    /** Fixed ring buffer: recording a frame does not allocate per-frame objects. */
+    private class TimestampWindow(capacity: Int) {
+        private val timestamps = LongArray(capacity)
+        private var start = 0
+        private var size = 0
+
+        fun add(timestampNanos: Long) {
+            if (size > 0 && timestampNanos <= timestampAt(size - 1)) return
+            if (size < timestamps.size) {
+                timestamps[(start + size) % timestamps.size] = timestampNanos
+                size++
+            } else {
+                timestamps[start] = timestampNanos
+                start = (start + 1) % timestamps.size
+            }
+        }
+
+        fun fps(nowNanos: Long, windowNanos: Long, minimumSpanNanos: Long): Double? {
+            val cutoff = nowNanos - windowNanos
+            while (size > 0 && timestampAt(0) < cutoff) {
+                start = (start + 1) % timestamps.size
+                size--
+            }
+            if (size < 2) return null
+            val span = timestampAt(size - 1) - timestampAt(0)
+            if (span < minimumSpanNanos) return null
+            return (size - 1) * NANOS_PER_SECOND / span
+        }
+
+        fun clear() {
+            start = 0
+            size = 0
+        }
+
+        private fun timestampAt(index: Int): Long =
+            timestamps[(start + index) % timestamps.size]
+    }
+
+    companion object {
+        const val FPS_WINDOW_SECONDS = 3
+        private const val FPS_WINDOW_NANOS = FPS_WINDOW_SECONDS * 1_000_000_000L
+        private const val MINIMUM_FPS_SPAN_NANOS = 2_000_000_000L
+        private const val FPS_TIMESTAMP_CAPACITY = 512
+        private const val NANOS_PER_SECOND = 1_000_000_000.0
     }
 }
