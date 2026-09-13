@@ -214,6 +214,25 @@ class ShoulderPressRuleEngineTest {
         assertTrue(end.isRepCorrect)
     }
 
+    @Test
+    fun restingAtRackPosition_doesNotTriggerArmsNotVertical() {
+        // Regression: the shoulder->wrist vector is naturally near-horizontal
+        // (~80-90 deg from vertical) at the racked START position by
+        // definition -- the wrist sits at shoulder height there. Holding at
+        // rest, even for many frames, must never itself count as "arms not
+        // vertical"; the check only applies once genuinely near lockout.
+        establishStart()
+        repeat(10) {
+            feed(100.0, elbowShoulderVertical = 0.0, leftArmVertical = 85.0, rightArmVertical = 82.0)
+        }
+        reachTop()
+        val end = returnToStart()
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertFalse(end.errors.contains(RepError.ARMS_NOT_VERTICAL))
+    }
+
     // --- Left/right symmetry ----------------------------------------------
 
     @Test
@@ -253,6 +272,22 @@ class ShoulderPressRuleEngineTest {
 
         assertTrue(end.isRepCompleted)
         assertTrue(end.isRepCorrect)
+    }
+
+    @Test
+    fun restingAtRackPosition_doesNotTriggerAsymmetry() {
+        // Regression: symmetry is only meaningful once a real press is
+        // underway, not while still racked at the bottom.
+        establishStart()
+        repeat(10) {
+            feed(100.0, elbowShoulderVertical = 0.0, leftElbow = 100.0, rightElbow = 60.0) // diff 40
+        }
+        reachTop()
+        val end = returnToStart()
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertFalse(end.errors.contains(RepError.ASYMMETRIC_ARM_POSITION))
     }
 
     // --- Insufficient elbow extension --------------------------------------

@@ -40,9 +40,17 @@ import kotlin.math.abs
  *  - [RepError.ARMS_NOT_VERTICAL]           shoulder->wrist tilts > 30 deg from
  *                                           vertical (20-30 deg is a tolerated
  *                                           grey zone -- anatomy/camera noise).
+ *                                           Only checked once the elbow is
+ *                                           near lockout (>= [ARM_VERTICAL_CHECK_MIN_ELBOW]):
+ *                                           at the racked START position the
+ *                                           wrist sits at shoulder height by
+ *                                           definition, so this vector is
+ *                                           naturally far from vertical there.
  *  - [RepError.ASYMMETRIC_ARM_POSITION]     left/right elbow angle differ by
  *                                           more than 25 deg (20-25 deg
- *                                           tolerated).
+ *                                           tolerated). Only checked once a
+ *                                           press is underway (elbow angle >
+ *                                           [START_ELBOW_MAX]), not while racked.
  *  - [RepError.INSUFFICIENT_ELBOW_EXTENSION] a genuine press attempt (elbow
  *                                           angle cleared [PRESS_ATTEMPT_MIN_ELBOW])
  *                                           returns to START without ever
@@ -82,8 +90,12 @@ class ShoulderPressRuleEngine {
         // Arm verticality (shoulder->wrist vs. vertical axis). <=20 deg is fine;
         // 20-30 deg is a tolerated grey zone (anatomy / camera-angle noise, not
         // scored); >30 deg is a real technique fault (pressing forward/outward).
+        // Only checked once the arm is close to lockout (see armsNearTop in
+        // processFrame) -- at the racked bottom the wrist sits at shoulder
+        // height by design, so the same vector reads as ~80-90 deg there.
         private const val ARMS_VERTICAL_VIOLATION_MIN = 30.0
         private const val ARMS_VERTICAL_CONSEC_FRAMES = 3
+        private const val ARM_VERTICAL_CHECK_MIN_ELBOW = 140.0
 
         // Left/right elbow-angle symmetry. <=20 deg difference is fine, 20-25 is
         // a tolerated grey zone, >25 deg is a real asymmetry fault.
@@ -220,24 +232,40 @@ class ShoulderPressRuleEngine {
         if (repActive && torsoTripped) errors.add(RepError.EXCESSIVE_TORSO_LEAN)
 
         // Most-deviated arm wins: a single arm pressing forward while the
-        // other stays vertical must still be caught.
+        // other stays vertical must still be caught. Only evaluated once the
+        // arm is meaningfully extended (near the top): at the racked START
+        // position the wrist sits *at shoulder height by definition*, so the
+        // shoulder->wrist vector is naturally near-horizontal there -- judging
+        // "vertical" against the rack position itself would trip on every
+        // rep before a press even begins.
+        val armsNearTop = !elbowAngle.isNaN() && elbowAngle >= ARM_VERTICAL_CHECK_MIN_ELBOW
         val armVertical = maxKeepNaN(leftArmVertical, rightArmVertical)
         val armsVerticalIssue =
-            !armVertical.isNaN() && armVertical > ARMS_VERTICAL_VIOLATION_MIN
-        val armsVerticalTripped = armsVerticalGate.update(armsVerticalIssue)
+            armsNearTop && !armVertical.isNaN() && armVertical > ARMS_VERTICAL_VIOLATION_MIN
+        val armsVerticalTripped = if (armsNearTop) armsVerticalGate.update(armsVerticalIssue) else false
         if (repActive && armsVerticalTripped) errors.add(RepError.ARMS_NOT_VERTICAL)
 
+        // Symmetry is meaningful once a real press is underway (past the
+        // racked bottom, same boundary the state machine uses to leave
+        // START) -- not while still racked, where both arms are expected to
+        // sit close together anyway.
+        val pastRack = !elbowAngle.isNaN() && elbowAngle > START_ELBOW_MAX
         val asymmetry =
             if (!leftElbowAngle.isNaN() && !rightElbowAngle.isNaN())
                 abs(leftElbowAngle - rightElbowAngle)
             else Double.NaN
         val asymmetryIssue =
-            !asymmetry.isNaN() && asymmetry > ELBOW_ASYMMETRY_VIOLATION_MIN
-        val asymmetryTripped = asymmetryGate.update(asymmetryIssue)
+            pastRack && !asymmetry.isNaN() && asymmetry > ELBOW_ASYMMETRY_VIOLATION_MIN
+        val asymmetryTripped = if (pastRack) asymmetryGate.update(asymmetryIssue) else false
         if (repActive && asymmetryTripped) errors.add(RepError.ASYMMETRIC_ARM_POSITION)
 
         if (repActive) {
-            accumulateDebug(elbowAngle, torsoVerticalAngle, armVertical, asymmetry)
+            accumulateDebug(
+                elbowAngle,
+                torsoVerticalAngle,
+                if (armsNearTop) armVertical else Double.NaN,
+                if (pastRack) asymmetry else Double.NaN
+            )
             frameRecorder.record(currentState.name) {
                 linkedMapOf(
                     "elbow" to elbowAngle,
