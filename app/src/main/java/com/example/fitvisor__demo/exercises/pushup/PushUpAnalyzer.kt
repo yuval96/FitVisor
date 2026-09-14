@@ -11,15 +11,27 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 /**
  * Side-view push-up analyzer. Metrics: elbow angle (wrist-elbow-shoulder),
  * body-line angle (shoulder-hip-ankle) and the hip-to-ankle tilt relative to
- * horizontal. All three prefer MediaPipe's real-world (metric) 3D landmarks
- * ([SideViewAnalyzer.worldLandmarks]) when available, falling back to the
- * original 2D image-space calculation otherwise -- the 2D version is only
- * accurate in an exact side-on profile stance; see [KinematicCalculator]'s
- * class doc.
+ * horizontal. Can compute all three from MediaPipe's real-world (metric) 3D
+ * landmarks ([SideViewAnalyzer.worldLandmarks]) via the `world*` helpers
+ * below, falling back to the original 2D image-space calculation when 3D is
+ * off or unavailable -- see [KinematicCalculator]'s class doc for why 3D
+ * exists at all.
+ *
+ * @param use3D defaults **off**. Push-up is a horizontal plank held close to
+ *   a low, roughly-floor-level camera -- a very different geometry from the
+ *   standing exercises 3D was built for, with far more foreshortening and
+ *   faster near-camera hand motion. In practice this made depth (Z)
+ *   estimation unreliable enough that rep detection stopped working
+ *   altogether. Push-up already instructs the user to set the phone up
+ *   side-on ("Place the phone sideways..."), which is exactly the condition
+ *   the 2D calculation needs to be accurate, so the 3D robustness gain
+ *   matters less here than the regression it introduced. See
+ *   [SideViewAnalyzer]'s doc for how to flip this back on for testing.
  */
 class PushUpAnalyzer(
+    use3D: Boolean = false,
     poseQualityEnabled: () -> Boolean = { false }
-) : SideViewAnalyzer(poseQualityEnabled) {
+) : SideViewAnalyzer(poseQualityEnabled, use3D) {
 
     private val engine = PushUpRuleEngine()
 

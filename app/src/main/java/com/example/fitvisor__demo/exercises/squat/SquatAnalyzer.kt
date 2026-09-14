@@ -48,10 +48,16 @@ data class KneeOverToeMetrics(
  * knee/ankle/foot-index specifically aren't confident enough this frame, not
  * because a different tracker chose a different leg. Same 3D-preferred, 2D-
  * fallback pattern as the primary angles.
+ *
+ * @param use3D defaults on: squat is the exercise that motivated the 3D
+ *   migration (2D knee-angle readings varied a lot between otherwise-
+ *   identical reps depending on camera angle) and has been confirmed working
+ *   well with it. See [SideViewAnalyzer]'s doc for how to flip this off.
  */
 class SquatAnalyzer(
+    use3D: Boolean = true,
     poseQualityEnabled: () -> Boolean = { false }
-) : SideViewAnalyzer(poseQualityEnabled) {
+) : SideViewAnalyzer(poseQualityEnabled, use3D) {
 
     private val engine = SquatRuleEngine()
 

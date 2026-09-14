@@ -16,9 +16,20 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * The rule engine is never fed during unreliable frames, so a repetition is not
  * reset or miscounted because of one bad frame. Only after several consecutive
  * unreliable frames is the engine reset.
+ *
+ * @param use3D whether [worldLandmarks] is populated for subclasses that
+ *   compute camera-angle-robust geometry from it (see
+ *   [com.example.fitvisor__demo.kinematics.KinematicCalculator]'s `*3D`
+ *   functions). When `false`, [worldLandmarks] always reads empty, so a
+ *   subclass's existing `world*(...) ?: 2D-calculation` fallback pattern
+ *   transparently always takes the 2D path -- no subclass code needs to
+ *   change to flip an exercise between 2D and 3D, only this constructor
+ *   argument (each concrete analyzer exposes its own `use3D` default; see
+ *   its class doc for why that default was chosen).
  */
 abstract class SideViewAnalyzer(
-    private val poseQualityEnabled: () -> Boolean = { false }
+    private val poseQualityEnabled: () -> Boolean = { false },
+    private val use3D: Boolean = true
 ) : ExerciseAnalyzer {
 
     protected val sideSelector = SideSelector()
@@ -29,9 +40,9 @@ abstract class SideViewAnalyzer(
     /**
      * Real-world (metric) 3D landmarks for the frame currently being
      * analyzed, refreshed at the top of every [analyze] call. Empty when
-     * unavailable. Subclasses that want camera-angle-robust geometry read
-     * this inside [analyzeSide] (see [com.example.fitvisor__demo.kinematics.KinematicCalculator]'s
-     * `*3D` functions); subclasses that stay purely 2D simply never touch it.
+     * unavailable *or* when [use3D] is false. Subclasses that want
+     * camera-angle-robust geometry read this inside [analyzeSide]; subclasses
+     * that stay purely 2D simply never touch it.
      */
     protected var worldLandmarks: List<Landmark> = emptyList()
         private set
@@ -67,7 +78,7 @@ abstract class SideViewAnalyzer(
             return notVisible()
         }
 
-        this.worldLandmarks = worldLandmarks
+        this.worldLandmarks = if (use3D) worldLandmarks else emptyList()
 
         val left = leftLandmarks(landmarks)
         val right = rightLandmarks(landmarks)

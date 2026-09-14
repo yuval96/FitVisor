@@ -43,10 +43,18 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * When [debugEnabled] is on, this analyzer also emits
  * temporary Logcat debug (per-side angles, phase, failing rule and per-rep
  * min/max ranges) for on-device threshold tuning. See that flag's doc.
+ *
+ * @param use3D defaults on: shoulder press is a standing exercise, the same
+ *   camera geometry 3D was built for and squat confirmed it working well
+ *   with. When `false`, the per-arm world landmarks are never read and every
+ *   `world*(...) ?: 2D-calculation` call below transparently takes the 2D
+ *   path -- no other code here needs to change to flip this exercise between
+ *   2D and 3D, only this constructor argument.
  */
 class ShoulderPressAnalyzer(
     private val debugEnabled: () -> Boolean = { false },
-    private val poseQualityEnabled: () -> Boolean = debugEnabled
+    private val poseQualityEnabled: () -> Boolean = debugEnabled,
+    private val use3D: Boolean = true
 ) : ExerciseAnalyzer {
 
     private val engine = ShoulderPressRuleEngine()
@@ -112,15 +120,20 @@ class ShoulderPressAnalyzer(
             null
         }
 
+        // Empty (not just unavailable-this-frame) when use3D is off, so every
+        // world*(...) ?: 2D-calculation call below transparently takes the 2D
+        // path -- same pattern as SideViewAnalyzer.
+        val effectiveWorldLandmarks = if (use3D) worldLandmarks else emptyList()
+
         // Per-arm metrics for whichever arm(s) are reliable; kept separate for
         // debug, then averaged into the single values the rule engine consumes.
         val leftMetrics =
             if (leftReliable) {
-                armMetrics(leftLandmarks, worldArmLandmarks(worldLandmarks, useLeft = true), imageWidth, imageHeight)
+                armMetrics(leftLandmarks, worldArmLandmarks(effectiveWorldLandmarks, useLeft = true), imageWidth, imageHeight)
             } else null
         val rightMetrics =
             if (rightReliable) {
-                armMetrics(rightLandmarks, worldArmLandmarks(worldLandmarks, useLeft = false), imageWidth, imageHeight)
+                armMetrics(rightLandmarks, worldArmLandmarks(effectiveWorldLandmarks, useLeft = false), imageWidth, imageHeight)
             } else null
 
         val elbow = Averager()

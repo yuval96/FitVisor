@@ -12,15 +12,27 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
  * Side-view biceps-curl analyzer. Uses the most reliable visible arm. Metrics:
  * elbow angle (shoulder-elbow-wrist), torso inclination (shoulder-hip vs
  * vertical) and upper-arm-to-torso angle (how far the elbow swings from the
- * body). All three prefer MediaPipe's real-world (metric) 3D landmarks
- * ([SideViewAnalyzer.worldLandmarks]) when available, falling back to the
- * original 2D image-space calculation otherwise -- the 2D version is only
- * accurate in an exact side-on profile stance; see [KinematicCalculator]'s
- * class doc.
+ * body). Can compute all three from MediaPipe's real-world (metric) 3D
+ * landmarks ([SideViewAnalyzer.worldLandmarks]) via the `world*` helpers
+ * below, falling back to the original 2D image-space calculation when 3D is
+ * off or unavailable -- see [KinematicCalculator]'s class doc for why 3D
+ * exists at all.
+ *
+ * @param use3D defaults **off**. The torso-stays-vertical check here has by
+ *   far the tightest threshold of any exercise and the least intentional
+ *   motion to dwarf depth (Z) noise (unlike squat's wide-range lean check),
+ *   which on-device showed up as a persistent, orientation-dependent false
+ *   "torso leaning" reading. Biceps curl already instructs the user to set
+ *   up side-on ("Stand sideways or slightly angled..."), which is exactly
+ *   the condition the 2D calculation needs to be accurate, so the 3D
+ *   robustness gain matters less here than the false positives it
+ *   introduced. See [SideViewAnalyzer]'s doc for how to flip this back on
+ *   for testing.
  */
 class BicepsCurlAnalyzer(
+    use3D: Boolean = false,
     poseQualityEnabled: () -> Boolean = { false }
-) : SideViewAnalyzer(poseQualityEnabled) {
+) : SideViewAnalyzer(poseQualityEnabled, use3D) {
 
     private val engine = BicepsCurlRuleEngine()
 
