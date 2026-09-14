@@ -205,13 +205,13 @@ class ShoulderPressAnalyzer(
         val worldWr = worldArm?.get(2)
         val worldHip = worldArm?.get(3)
 
-        val elbowAngle = angle3(worldSh, worldEl, worldWr)
+        val elbowAngle = angle3(worldSh, worldEl, worldWr, sh, el, wr)
             ?: KinematicCalculator.calculateAngle(sh, el, wr, imageWidth, imageHeight)
-        val upperArmAngle = angle3(worldEl, worldSh, worldHip)
+        val upperArmAngle = angle3(worldEl, worldSh, worldHip, el, sh, hip)
             ?: KinematicCalculator.upperArmToTorsoAngle(sh, el, hip, imageWidth, imageHeight)
-        val shoulderWristVertical = vertical3(worldSh, worldWr)
+        val shoulderWristVertical = vertical3(worldSh, worldWr, sh, wr)
             ?: KinematicCalculator.angleFromVertical(sh, wr, imageWidth, imageHeight)
-        val torsoAngle = vertical3(worldSh, worldHip)
+        val torsoAngle = vertical3(worldSh, worldHip, sh, hip)
             ?: KinematicCalculator.angleFromVertical(sh, hip, imageWidth, imageHeight)
 
         return ArmMetrics(
@@ -243,13 +243,27 @@ class ShoulderPressAnalyzer(
         return listOf(sh, el, wr, hip)
     }
 
-    private fun angle3(first: Landmark?, mid: Landmark?, last: Landmark?): Double? {
+    /**
+     * 3D angle at [mid], or null if unavailable or if any of the
+     * corresponding 2D landmarks isn't confidently observed enough to trust
+     * its depth estimate (see [LandmarkConfidence.trustedForWorldLandmarks]).
+     */
+    private fun angle3(
+        first: Landmark?, mid: Landmark?, last: Landmark?,
+        first2D: NormalizedLandmark, mid2D: NormalizedLandmark, last2D: NormalizedLandmark
+    ): Double? {
         if (first == null || mid == null || last == null) return null
+        if (!LandmarkConfidence.trustedForWorldLandmarks(first2D, mid2D, last2D)) return null
         return KinematicCalculator.calculateAngle3D(first, mid, last).takeUnless { it.isNaN() }
     }
 
-    private fun vertical3(a: Landmark?, b: Landmark?): Double? {
+    /** 3D vertical-deviation angle, or null if unavailable or not confidently observed; see [angle3]. */
+    private fun vertical3(
+        a: Landmark?, b: Landmark?,
+        a2D: NormalizedLandmark, b2D: NormalizedLandmark
+    ): Double? {
         if (a == null || b == null) return null
+        if (!LandmarkConfidence.trustedForWorldLandmarks(a2D, b2D)) return null
         return KinematicCalculator.angleFromVertical3D(a, b).takeUnless { it.isNaN() }
     }
 

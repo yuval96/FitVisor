@@ -4,6 +4,7 @@ import com.example.fitvisor__demo.exercises.ExerciseFrameOutput
 import com.example.fitvisor__demo.exercises.SideViewAnalyzer
 import com.example.fitvisor__demo.kinematics.KinematicCalculator
 import com.example.fitvisor__demo.model.OverlayMetrics
+import com.example.fitvisor__demo.pose.LandmarkConfidence
 import com.example.fitvisor__demo.pose.PoseLandmarkIndices
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
@@ -56,11 +57,11 @@ class PushUpAnalyzer(
         val hip = landmarks[hipIndex]
         val ankle = landmarks[ankleIndex]
 
-        val elbowAngle = worldAngle3(wristIndex, elbowIndex, shIndex)
+        val elbowAngle = worldAngle3(wristIndex, elbowIndex, shIndex, wrist, elbow, shoulder)
             ?: KinematicCalculator.calculateAngle(wrist, elbow, shoulder, imageWidth, imageHeight)
-        val bodyLineAngle = worldAngle3(shIndex, hipIndex, ankleIndex)
+        val bodyLineAngle = worldAngle3(shIndex, hipIndex, ankleIndex, shoulder, hip, ankle)
             ?: KinematicCalculator.bodyLineAngle(shoulder, hip, ankle, imageWidth, imageHeight)
-        val horizontalAngle = worldHorizontalAngle(hipIndex, ankleIndex)
+        val horizontalAngle = worldHorizontalAngle(hipIndex, ankleIndex, hip, ankle)
             ?: KinematicCalculator.angleFromHorizontal(hip, ankle, imageWidth, imageHeight)
 
         val result = engine.processFrame(elbowAngle, bodyLineAngle, horizontalAngle)
@@ -77,8 +78,16 @@ class PushUpAnalyzer(
         return ExerciseFrameOutput(result, metrics)
     }
 
-    /** 3D angle at [midIndex] from [worldLandmarks], or null if unavailable. */
-    private fun worldAngle3(firstIndex: Int, midIndex: Int, lastIndex: Int): Double? {
+    /**
+     * 3D angle at [midIndex] from [worldLandmarks], or null if unavailable or
+     * if any of the corresponding 2D landmarks isn't confidently observed
+     * enough to trust its depth estimate (see [LandmarkConfidence.trustedForWorldLandmarks]).
+     */
+    private fun worldAngle3(
+        firstIndex: Int, midIndex: Int, lastIndex: Int,
+        first2D: NormalizedLandmark, mid2D: NormalizedLandmark, last2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(first2D, mid2D, last2D)) return null
         val first = worldLandmarks.getOrNull(firstIndex) ?: return null
         val mid = worldLandmarks.getOrNull(midIndex) ?: return null
         val last = worldLandmarks.getOrNull(lastIndex) ?: return null
@@ -87,10 +96,15 @@ class PushUpAnalyzer(
 
     /**
      * 3D horizontal-deviation magnitude from [worldLandmarks], or null if
-     * unavailable. Unsigned (see [KinematicCalculator.angleFromHorizontal3D]),
-     * which is safe here: [PushUpRuleEngine] only ever compares `abs(...)`.
+     * unavailable or not confidently observed (see [worldAngle3]). Unsigned
+     * (see [KinematicCalculator.angleFromHorizontal3D]), which is safe here:
+     * [PushUpRuleEngine] only ever compares `abs(...)`.
      */
-    private fun worldHorizontalAngle(fromIndex: Int, toIndex: Int): Double? {
+    private fun worldHorizontalAngle(
+        fromIndex: Int, toIndex: Int,
+        from2D: NormalizedLandmark, to2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(from2D, to2D)) return null
         val from = worldLandmarks.getOrNull(fromIndex) ?: return null
         val to = worldLandmarks.getOrNull(toIndex) ?: return null
         return KinematicCalculator.angleFromHorizontal3D(from, to).takeUnless { it.isNaN() }

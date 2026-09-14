@@ -85,9 +85,9 @@ class SquatAnalyzer(
         val knee = landmarks[kneeIndex]
         val ankle = landmarks[ankleIndex]
 
-        val kneeAngle = worldKneeAngle(hipIndex, kneeIndex, ankleIndex)
+        val kneeAngle = worldKneeAngle(hipIndex, kneeIndex, ankleIndex, hip, knee, ankle)
             ?: KinematicCalculator.calculateAngle(hip, knee, ankle, imageWidth, imageHeight)
-        val torsoAngle = worldTorsoAngle(shIndex, hipIndex)
+        val torsoAngle = worldTorsoAngle(shIndex, hipIndex, shoulder, hip)
             ?: KinematicCalculator.angleFromVertical(shoulder, hip, imageWidth, imageHeight)
 
         // Knee alignment rule intentionally disabled (2D was unreliable).
@@ -107,16 +107,32 @@ class SquatAnalyzer(
         return ExerciseFrameOutput(result, metrics)
     }
 
-    /** 3D knee (hip-knee-ankle) angle from [worldLandmarks], or null if unavailable. */
-    private fun worldKneeAngle(hipIndex: Int, kneeIndex: Int, ankleIndex: Int): Double? {
+    /**
+     * 3D knee (hip-knee-ankle) angle from [worldLandmarks], or null if
+     * unavailable or if any corresponding 2D landmark isn't confidently
+     * observed enough to trust its depth estimate (see
+     * [LandmarkConfidence.trustedForWorldLandmarks]).
+     */
+    private fun worldKneeAngle(
+        hipIndex: Int, kneeIndex: Int, ankleIndex: Int,
+        hip2D: NormalizedLandmark, knee2D: NormalizedLandmark, ankle2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(hip2D, knee2D, ankle2D)) return null
         val hip = worldLandmarks.getOrNull(hipIndex) ?: return null
         val knee = worldLandmarks.getOrNull(kneeIndex) ?: return null
         val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
         return KinematicCalculator.calculateAngle3D(hip, knee, ankle).takeUnless { it.isNaN() }
     }
 
-    /** 3D torso-from-vertical angle from [worldLandmarks], or null if unavailable. */
-    private fun worldTorsoAngle(shIndex: Int, hipIndex: Int): Double? {
+    /**
+     * 3D torso-from-vertical angle from [worldLandmarks], or null if
+     * unavailable or not confidently observed; see [worldKneeAngle].
+     */
+    private fun worldTorsoAngle(
+        shIndex: Int, hipIndex: Int,
+        shoulder2D: NormalizedLandmark, hip2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(shoulder2D, hip2D)) return null
         val shoulder = worldLandmarks.getOrNull(shIndex) ?: return null
         val hip = worldLandmarks.getOrNull(hipIndex) ?: return null
         return KinematicCalculator.angleFromVertical3D(shoulder, hip).takeUnless { it.isNaN() }
@@ -147,9 +163,9 @@ class SquatAnalyzer(
         val confidence = LandmarkConfidence.minOfAll(knee, ankle, footIndex)
         if (confidence < SideSelector.MIN_SIDE_CONFIDENCE) return null
 
-        val ankleAngle = worldAnkleAngle(kneeIndex, ankleIndex, footIndexIndex)
+        val ankleAngle = worldAnkleAngle(kneeIndex, ankleIndex, footIndexIndex, knee, ankle, footIndex)
             ?: KinematicCalculator.calculateAngle(knee, ankle, footIndex, imageWidth, imageHeight)
-        val kneeToeOffset = worldKneeToeOffset(kneeIndex, ankleIndex, footIndexIndex)
+        val kneeToeOffset = worldKneeToeOffset(kneeIndex, ankleIndex, footIndexIndex, knee, ankle, footIndex)
             ?: KinematicCalculator.normalizedKneeToeOffset(knee, ankle, footIndex, imageWidth, imageHeight)
 
         return KneeOverToeMetrics(
@@ -160,16 +176,30 @@ class SquatAnalyzer(
         )
     }
 
-    /** 3D ankle (knee-ankle-footIndex) angle from [worldLandmarks], or null if unavailable. */
-    private fun worldAnkleAngle(kneeIndex: Int, ankleIndex: Int, footIndexIndex: Int): Double? {
+    /**
+     * 3D ankle (knee-ankle-footIndex) angle from [worldLandmarks], or null if
+     * unavailable or not confidently observed; see [worldKneeAngle].
+     */
+    private fun worldAnkleAngle(
+        kneeIndex: Int, ankleIndex: Int, footIndexIndex: Int,
+        knee2D: NormalizedLandmark, ankle2D: NormalizedLandmark, footIndex2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(knee2D, ankle2D, footIndex2D)) return null
         val knee = worldLandmarks.getOrNull(kneeIndex) ?: return null
         val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
         val footIndex = worldLandmarks.getOrNull(footIndexIndex) ?: return null
         return KinematicCalculator.calculateAngle3D(knee, ankle, footIndex).takeUnless { it.isNaN() }
     }
 
-    /** 3D normalized knee-to-toe offset from [worldLandmarks], or null if unavailable. */
-    private fun worldKneeToeOffset(kneeIndex: Int, ankleIndex: Int, footIndexIndex: Int): Double? {
+    /**
+     * 3D normalized knee-to-toe offset from [worldLandmarks], or null if
+     * unavailable or not confidently observed; see [worldKneeAngle].
+     */
+    private fun worldKneeToeOffset(
+        kneeIndex: Int, ankleIndex: Int, footIndexIndex: Int,
+        knee2D: NormalizedLandmark, ankle2D: NormalizedLandmark, footIndex2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(knee2D, ankle2D, footIndex2D)) return null
         val knee = worldLandmarks.getOrNull(kneeIndex) ?: return null
         val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
         val footIndex = worldLandmarks.getOrNull(footIndexIndex) ?: return null

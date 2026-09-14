@@ -4,6 +4,7 @@ import com.example.fitvisor__demo.exercises.ExerciseFrameOutput
 import com.example.fitvisor__demo.exercises.SideViewAnalyzer
 import com.example.fitvisor__demo.kinematics.KinematicCalculator
 import com.example.fitvisor__demo.model.OverlayMetrics
+import com.example.fitvisor__demo.pose.LandmarkConfidence
 import com.example.fitvisor__demo.pose.PoseLandmarkIndices
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 
@@ -53,11 +54,11 @@ class BicepsCurlAnalyzer(
         val wrist = landmarks[wristIndex]
         val hip = landmarks[hipIndex]
 
-        val elbowAngle = worldAngle3(shIndex, elbowIndex, wristIndex)
+        val elbowAngle = worldAngle3(shIndex, elbowIndex, wristIndex, shoulder, elbow, wrist)
             ?: KinematicCalculator.calculateAngle(shoulder, elbow, wrist, imageWidth, imageHeight)
-        val torsoAngle = worldTorsoAngle(shIndex, hipIndex)
+        val torsoAngle = worldTorsoAngle(shIndex, hipIndex, shoulder, hip)
             ?: KinematicCalculator.angleFromVertical(shoulder, hip, imageWidth, imageHeight)
-        val upperArmAngle = worldAngle3(elbowIndex, shIndex, hipIndex)
+        val upperArmAngle = worldAngle3(elbowIndex, shIndex, hipIndex, elbow, shoulder, hip)
             ?: KinematicCalculator.upperArmToTorsoAngle(shoulder, elbow, hip, imageWidth, imageHeight)
 
         val result = engine.processFrame(elbowAngle, torsoAngle, upperArmAngle)
@@ -74,16 +75,31 @@ class BicepsCurlAnalyzer(
         return ExerciseFrameOutput(result, metrics)
     }
 
-    /** 3D angle at [midIndex] from [worldLandmarks], or null if unavailable. */
-    private fun worldAngle3(firstIndex: Int, midIndex: Int, lastIndex: Int): Double? {
+    /**
+     * 3D angle at [midIndex] from [worldLandmarks], or null if unavailable or
+     * if any of the corresponding 2D landmarks isn't confidently observed
+     * enough to trust its depth estimate (see [LandmarkConfidence.trustedForWorldLandmarks]).
+     */
+    private fun worldAngle3(
+        firstIndex: Int, midIndex: Int, lastIndex: Int,
+        first2D: NormalizedLandmark, mid2D: NormalizedLandmark, last2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(first2D, mid2D, last2D)) return null
         val first = worldLandmarks.getOrNull(firstIndex) ?: return null
         val mid = worldLandmarks.getOrNull(midIndex) ?: return null
         val last = worldLandmarks.getOrNull(lastIndex) ?: return null
         return KinematicCalculator.calculateAngle3D(first, mid, last).takeUnless { it.isNaN() }
     }
 
-    /** 3D torso-from-vertical angle from [worldLandmarks], or null if unavailable. */
-    private fun worldTorsoAngle(shIndex: Int, hipIndex: Int): Double? {
+    /**
+     * 3D torso-from-vertical angle from [worldLandmarks], or null if
+     * unavailable or not confidently observed; see [worldAngle3].
+     */
+    private fun worldTorsoAngle(
+        shIndex: Int, hipIndex: Int,
+        shoulder2D: NormalizedLandmark, hip2D: NormalizedLandmark
+    ): Double? {
+        if (!LandmarkConfidence.trustedForWorldLandmarks(shoulder2D, hip2D)) return null
         val shoulder = worldLandmarks.getOrNull(shIndex) ?: return null
         val hip = worldLandmarks.getOrNull(hipIndex) ?: return null
         return KinematicCalculator.angleFromVertical3D(shoulder, hip).takeUnless { it.isNaN() }
