@@ -36,8 +36,11 @@ import com.example.fitvisor__demo.utils.ConsecutiveGate
 class BicepsCurlRuleEngine {
 
     companion object {
-        // Arm extended (bottom) window.
-        private const val LOW_ELBOW_MIN = 160.0
+        // Arm extended (bottom) window. A real curl often doesn't fully lock
+        // the elbow out at the bottom (people keep a slight bend), so this is
+        // set a few degrees short of full extension -- still a clear 5 deg
+        // hysteresis gap above REP_START_ELBOW to avoid boundary flicker.
+        private const val LOW_ELBOW_MIN = 155.0
         private const val LOW_ELBOW_MAX = 180.0
 
         // Top-of-curl: elbow flexed to at most this angle.
@@ -49,12 +52,20 @@ class BicepsCurlRuleEngine {
         // Elbow opens past this from the top -> lowering.
         private const val UP_EXIT_ELBOW = 80.0
 
-        // Torso must stay within this many degrees of vertical.
-        private const val TORSO_VERTICAL_LIMIT = 10.0
+        // Torso must stay within this many degrees of vertical. Matches
+        // Shoulder Press's relaxed torso limit -- 10 deg was too tight once
+        // torso angle started coming from 3D world landmarks (noisier,
+        // particularly on depth/Z, than the 2D projection it replaced; see
+        // WorldLandmarkSmoother). A wide-range check like squat's 45 deg
+        // excessive-lean limit barely notices that noise; this mostly-static
+        // check did.
+        private const val TORSO_VERTICAL_LIMIT = 15.0
 
-        // Configurable initial upper-arm-to-torso limit; the elbow should stay
-        // pinned to the body. Tune on-device.
-        private const val UPPER_ARM_LIMIT = 20.0
+        // Upper-arm-to-torso limit; the elbow should stay reasonably close to
+        // the body. Loosened from 20 for the same reason as the torso limit
+        // above, plus real curls naturally let the elbow drift a bit. Tune
+        // further on-device.
+        private const val UPPER_ARM_LIMIT = 30.0
 
         private const val WARNING_TORSO = "Keep your torso upright"
         private const val WARNING_UPPER_ARM = "Keep your upper arm close to your body"

@@ -64,7 +64,7 @@ class BicepsCurlRuleEngineTest {
     @Test
     fun upperArmViolation_countsOneIncorrect() {
         feed(170.0)
-        curl(upperArm = 30.0) // elbow swings out, both frames -> latches (2 consecutive)
+        curl(upperArm = 40.0) // elbow swings out, both frames -> latches (2 consecutive)
         val end = reachTop(upperArm = 10.0)
 
         assertTrue(end.isRepCompleted)
@@ -75,7 +75,7 @@ class BicepsCurlRuleEngineTest {
     @Test
     fun torsoViolation_countsOneIncorrect() {
         feed(170.0)
-        curl(torso = 15.0) // torso swing, both frames -> latches
+        curl(torso = 25.0) // torso swing, both frames -> latches
         val end = reachTop(torso = 3.0)
 
         assertTrue(end.isRepCompleted)

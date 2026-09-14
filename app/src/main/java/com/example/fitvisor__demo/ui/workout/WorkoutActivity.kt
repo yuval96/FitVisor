@@ -37,6 +37,7 @@ import com.example.fitvisor__demo.model.RepDebugMetrics
 import com.example.fitvisor__demo.pose.LandmarkSmoother
 import com.example.fitvisor__demo.pose.PendingFrameCache
 import com.example.fitvisor__demo.pose.PoseLandmarkerHelper
+import com.example.fitvisor__demo.pose.WorldLandmarkSmoother
 import com.example.fitvisor__demo.settings.AnalysisConfig
 import com.example.fitvisor__demo.settings.AppSettings
 import com.example.fitvisor__demo.settings.DebugDataStore
@@ -103,6 +104,8 @@ class WorkoutActivity :
 
     private val landmarkSmoother =
         LandmarkSmoother(alpha = AnalysisConfig.LANDMARK_SMOOTHING_ALPHA)
+    private val worldLandmarkSmoother =
+        WorldLandmarkSmoother(alpha = AnalysisConfig.LANDMARK_SMOOTHING_ALPHA)
 
     companion object {
         const val EXTRA_EXERCISE_SESSION_ID = "EXERCISE_SESSION_ID"
@@ -333,7 +336,10 @@ class WorkoutActivity :
             val rawLandmarks =
                 result.landmarks().firstOrNull()
             val worldLandmarks =
-                result.worldLandmarks().firstOrNull().orEmpty()
+                result.worldLandmarks().firstOrNull()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { worldLandmarkSmoother.smooth(it) }
+                    .orEmpty()
 
             val smoothedLandmarks =
                 rawLandmarks?.let {
@@ -568,6 +574,7 @@ class WorkoutActivity :
         // Do not join half a movement before backgrounding to one after resuming.
         if (::analyzer.isInitialized) analyzer.reset()
         landmarkSmoother.reset()
+        worldLandmarkSmoother.reset()
         super.onPause()
     }
 
@@ -582,6 +589,7 @@ class WorkoutActivity :
         super.onDestroy()
 
         landmarkSmoother.reset()
+        worldLandmarkSmoother.reset()
         if (::analyzer.isInitialized) analyzer.reset()
         if (::audioFeedback.isInitialized) audioFeedback.close()
 
