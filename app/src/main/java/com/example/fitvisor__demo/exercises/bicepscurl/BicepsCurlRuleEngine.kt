@@ -40,14 +40,14 @@ class BicepsCurlRuleEngine {
         // the elbow out at the bottom (people keep a slight bend), so this is
         // set a few degrees short of full extension -- still a clear 5 deg
         // hysteresis gap above REP_START_ELBOW to avoid boundary flicker.
-        private const val LOW_ELBOW_MIN = 155.0
+        private const val LOW_ELBOW_MIN = 130.0
         private const val LOW_ELBOW_MAX = 180.0
 
         // Top-of-curl: elbow flexed to at most this angle.
         private const val UP_ELBOW_MAX = 60.0
 
         // Elbow bends below this from the bottom -> curling has started.
-        private const val REP_START_ELBOW = 150.0
+        private const val REP_START_ELBOW = 125.0
 
         // Elbow opens past this from the top -> lowering.
         private const val UP_EXIT_ELBOW = 80.0
