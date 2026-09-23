@@ -47,7 +47,7 @@ import kotlin.math.abs
  *                                           definition, so this vector is
  *                                           naturally far from vertical there.
  *  - [RepError.ASYMMETRIC_ARM_POSITION]     left/right elbow angle differ by
- *                                           more than 25 deg (20-25 deg
+ *                                           more than 12 deg (8-12 deg
  *                                           tolerated). Only checked once a
  *                                           press is underway (elbow angle >
  *                                           [START_ELBOW_MAX]), not while racked.
@@ -97,10 +97,12 @@ class ShoulderPressRuleEngine {
         private const val ARMS_VERTICAL_CONSEC_FRAMES = 3
         private const val ARM_VERTICAL_CHECK_MIN_ELBOW = 140.0
 
-        // Left/right elbow-angle symmetry. <=20 deg difference is fine, 20-25 is
-        // a tolerated grey zone, >25 deg is a real asymmetry fault.
-        private const val ELBOW_ASYMMETRY_VIOLATION_MIN = 25.0
-        private const val ASYMMETRY_CONSEC_FRAMES = 3
+        // Left/right elbow-angle symmetry. <=8 deg difference is fine, 8-12 is
+        // a tolerated grey zone, >12 deg is a real asymmetry fault. Lowered
+        // from 25 (grey zone 20-25) -- that required a very exaggerated,
+        // almost unrealistic imbalance before ever flagging anything.
+        private const val ELBOW_ASYMMETRY_VIOLATION_MIN = 12.0
+        private const val ASYMMETRY_CONSEC_FRAMES = 2
 
         // A press attempt must sustain PRESSING for this many consecutive
         // frames before a return to START without lockout is scored as a
