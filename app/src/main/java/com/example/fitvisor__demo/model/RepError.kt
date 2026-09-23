@@ -12,8 +12,6 @@ package com.example.fitvisor__demo.model
  * really detect:
  *  - Squat knee alignment is disabled -> no KNEE_ALIGNMENT.
  *  - Push-up top-orientation is not implemented -> no INVALID_TOP_ORIENTATION.
- *  - Biceps-curl lowering is not validated (the rep counts on the way up) -> no
- *    INCOMPLETE_LOWERING.
  *  - Shoulder-press START-position problems (wrong elbow height, arms not bent
  *    enough) are intentionally only a state-machine gate, not a scored fault:
  *    INVALID_START_POSITION, ELBOW_NOT_AT_SHOULDER_HEIGHT and
@@ -46,6 +44,7 @@ enum class RepError(val message: String) {
 
     // Biceps curl.
     INCOMPLETE_CURL("Did not curl high enough"),
+    INCOMPLETE_LOWERING("Did not fully extend the arm back down"),
     EXCESSIVE_TORSO_MOVEMENT("Torso moved too much"),
     EXCESSIVE_UPPER_ARM_MOVEMENT("Upper arm moved away from the body"),
 
