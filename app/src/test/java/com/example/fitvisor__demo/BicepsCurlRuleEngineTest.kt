@@ -145,4 +145,48 @@ class BicepsCurlRuleEngineTest {
         assertTrue(nextRep.isRepCompleted)
         assertTrue(nextRep.isRepCorrect)
     }
+
+    @Test
+    fun meanderingMidCurl_neverStalls_stillReachesTopCorrectly() {
+        feed(170.0)
+        curl() // enters CURLING
+
+        // Wanders in the dead zone between UP_ELBOW_MAX (60) and LOW_ELBOW_MIN
+        // (130) -- neither threshold is met, so nothing should fire, and the
+        // state must not get wedged: a genuine top reached afterwards still
+        // has to register normally.
+        repeat(5) {
+            assertFalse(feed(90.0).isRepCompleted)
+            assertFalse(feed(110.0).isRepCompleted)
+            assertFalse(feed(95.0).isRepCompleted)
+        }
+
+        reachTop()
+        startLowering()
+        val end = lowerFully()
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+    }
+
+    @Test
+    fun incompleteCurl_doesNotStallFollowingReps() {
+        feed(170.0)
+        curl()
+        feed(100.0)
+        val aborted = lowerFully() // never reached the top -- counted incorrect
+
+        assertTrue(aborted.isRepCompleted)
+        assertFalse(aborted.isRepCorrect)
+        assertTrue(aborted.errors.contains(RepError.INCOMPLETE_CURL))
+
+        // A fresh, fully correct repetition right after must still be tracked.
+        curl()
+        reachTop()
+        startLowering()
+        val nextRep = lowerFully()
+
+        assertTrue(nextRep.isRepCompleted)
+        assertTrue(nextRep.isRepCorrect)
+    }
 }
