@@ -40,7 +40,15 @@ import com.example.fitvisor__demo.utils.ConsecutiveGate
 class SquatRuleEngine {
 
     companion object {
-        private const val REP_START_THRESHOLD = 160.0
+        // Leaving standing arms a repetition. Deliberately below
+        // SQUAT_UP_THRESHOLD (a 10 deg hysteresis gap) -- with the same
+        // value for both, ordinary pose noise while just standing still can
+        // dip below 160 for two frames, arm a phantom repetition, then bounce
+        // back above 160 for two more and immediately complete it as a
+        // spurious INSUFFICIENT_DEPTH rep right after a real one, without the
+        // user having moved. See BicepsCurlRuleEngine's REP_START_ELBOW for
+        // the same pattern.
+        private const val REP_START_THRESHOLD = 150.0
         private const val SQUAT_DOWN_THRESHOLD = 110.0
         private const val SQUAT_UP_THRESHOLD = 160.0
         private const val MAX_TORSO_INCLINATION = 45.0

@@ -39,8 +39,11 @@ enum class RepError(val message: String) {
     ELBOW_NOT_AT_SHOULDER_HEIGHT("Elbows were not at shoulder height"),
     INVALID_UPPER_ARM_ANGLE("Upper arms were at the wrong angle"),
     ARMS_NOT_VERTICAL("Arms were not pressed vertically"),
-    INSUFFICIENT_ELBOW_EXTENSION("Elbows were not fully extended"),
     ASYMMETRIC_ARM_POSITION("Arms were not raised symmetrically"),
+
+    // Shoulder press + Push-up: reversed direction before ever reaching a
+    // full lockout at the top of the rep.
+    INSUFFICIENT_ELBOW_EXTENSION("Elbows were not fully extended"),
 
     // Biceps curl.
     INCOMPLETE_CURL("Did not curl high enough"),

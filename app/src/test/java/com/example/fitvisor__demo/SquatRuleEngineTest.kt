@@ -133,16 +133,38 @@ class SquatRuleEngineTest {
     }
 
     @Test
-    fun boundaryValuesAreApplied_155LeavesStanding_105ReachesDepth() {
+    fun boundaryValuesAreApplied_145LeavesStanding_105ReachesDepth() {
         feed(170.0, 20.0)
-        feed(155.0, 20.0) // below the 160 start threshold
-        feed(155.0, 20.0)
+        feed(145.0, 20.0) // below the 150 start threshold
+        feed(145.0, 20.0)
         feed(105.0, 20.0) // reaches the 110 depth threshold
         feed(105.0, 20.0)
         val end = returnToStanding(torso = 20.0)
 
         assertTrue(end.isRepCompleted)
         assertTrue(end.isRepCorrect)
+    }
+
+    @Test
+    fun standingNoiseNearUpThreshold_doesNotArmPhantomRepAfterCompletion() {
+        // Regression: REP_START_THRESHOLD used to equal SQUAT_UP_THRESHOLD
+        // (both 160), so pose noise while just standing still -- oscillating
+        // a few degrees on either side of 160 -- could arm and immediately
+        // complete a second, spurious INSUFFICIENT_DEPTH rep right after a
+        // real one, with no actual movement behind it.
+        feed(170.0, 10.0)
+        arm()
+        reachDepth()
+        val realRep = returnToStanding()
+        assertTrue(realRep.isRepCompleted)
+        assertTrue(realRep.isRepCorrect)
+
+        var extraCompletions = 0
+        val noise = listOf(161.0, 158.0, 162.0, 157.0, 163.0, 159.0, 161.0, 160.0)
+        for (knee in noise) {
+            if (feed(knee, 10.0).isRepCompleted) extraCompletions++
+        }
+        assertEquals(0, extraCompletions)
     }
 
     @Test

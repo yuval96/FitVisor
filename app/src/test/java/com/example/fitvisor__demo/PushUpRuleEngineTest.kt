@@ -25,8 +25,8 @@ class PushUpRuleEngineTest {
 
     /** Two identical frames -> leaves the top (TOP -> DESCENDING). */
     private fun descend(bodyLine: Double = 178.0, horizontal: Double = 5.0) {
-        feed(140.0, bodyLine, horizontal)
-        feed(140.0, bodyLine, horizontal)
+        feed(130.0, bodyLine, horizontal)
+        feed(130.0, bodyLine, horizontal)
     }
 
     /** Two identical frames -> reaches required depth (-> BOTTOM). */
@@ -111,5 +111,54 @@ class PushUpRuleEngineTest {
             if (feed(170.0).isRepCompleted) extraCompletions++
         }
         assertEquals(0, extraCompletions)
+    }
+
+    @Test
+    fun holdingNearTopBoundary_doesNotArmPhantomRepAfterCompletion() {
+        // Regression: REP_START_THRESHOLD used to equal TOP_ELBOW_THRESHOLD
+        // (both 150), so pose noise while just holding the top -- oscillating
+        // a few degrees on either side of 150 -- could arm and immediately
+        // complete a second, spurious INSUFFICIENT_DEPTH rep right after a
+        // real one, with no actual movement behind it.
+        feed(170.0)
+        descend()
+        reachBottom()
+        exitBottom()
+        val realRep = returnToTop()
+        assertTrue(realRep.isRepCompleted)
+        assertTrue(realRep.isRepCorrect)
+
+        var extraCompletions = 0
+        val noise = listOf(151.0, 148.0, 152.0, 147.0, 153.0, 149.0, 151.0, 150.0)
+        for (elbow in noise) {
+            if (feed(elbow).isRepCompleted) extraCompletions++
+        }
+        assertEquals(0, extraCompletions)
+    }
+
+    @Test
+    fun reversingBeforeLockout_countsOneIncorrect_andDoesNotStallFollowingReps() {
+        feed(170.0)
+        descend()
+        reachBottom()
+        exitBottom()      // ascending, elbow at 120
+
+        // Never locks out at the top -- reverses and starts descending again
+        // instead. The abandoned repetition must be closed out as incorrect
+        // right here, not left stuck forever waiting for a TOP that never comes.
+        val restart = feed(90.0).let { feed(90.0) }
+
+        assertTrue(restart.isRepCompleted)
+        assertFalse(restart.isRepCorrect)
+        assertTrue(restart.errors.contains(RepError.INSUFFICIENT_ELBOW_EXTENSION))
+
+        // The next repetition must still be trackable -- prove the state
+        // machine picked back up cleanly from the restart above.
+        reachBottom()
+        exitBottom()
+        val nextRep = returnToTop()
+
+        assertTrue(nextRep.isRepCompleted)
+        assertTrue(nextRep.isRepCorrect)
     }
 }
