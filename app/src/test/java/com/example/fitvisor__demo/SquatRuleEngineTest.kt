@@ -10,7 +10,7 @@ import org.junit.Test
 
 /**
  * Synthetic angle-sequence tests for [SquatRuleEngine].
- * Good torso = 10-20 deg (within the bottom-position range); knee depth reached at <= 110.
+ * Good torso = 10-20 deg (within the bottom-position range); knee depth reached at <= 100.
  * A torso value of 50 deg is above the 45 deg excessive-lean limit.
  *
  * The three cycle-defining knee-angle thresholds (leaving standing, reaching
@@ -133,16 +133,30 @@ class SquatRuleEngineTest {
     }
 
     @Test
-    fun boundaryValuesAreApplied_145LeavesStanding_105ReachesDepth() {
+    fun boundaryValuesAreApplied_145LeavesStanding_100ReachesDepth() {
         feed(170.0, 20.0)
         feed(145.0, 20.0) // below the 150 start threshold
         feed(145.0, 20.0)
-        feed(105.0, 20.0) // reaches the 110 depth threshold
-        feed(105.0, 20.0)
+        feed(100.0, 20.0) // exactly the 100 depth threshold (inclusive)
+        feed(100.0, 20.0)
         val end = returnToStanding(torso = 20.0)
 
         assertTrue(end.isRepCompleted)
         assertTrue(end.isRepCorrect)
+    }
+
+    @Test
+    fun kneeAt105_isNoLongerDeepEnough() {
+        // Regression: depth used to be <= 110, so 105 counted. It's now <= 100.
+        feed(170.0, 20.0)
+        arm(torso = 20.0)
+        feed(105.0, 20.0)
+        feed(105.0, 20.0)
+        val end = returnToStanding(torso = 20.0)
+
+        assertTrue(end.isRepCompleted)
+        assertFalse(end.isRepCorrect)
+        assertTrue(end.errors.contains(RepError.INSUFFICIENT_DEPTH))
     }
 
     @Test
@@ -286,6 +300,47 @@ class SquatRuleEngineTest {
         assertEquals(70.0, metrics.values["ankleAngle"]!!, 0.001)
         assertEquals(0.9, metrics.ratios["normalizedKneeToeOffset"]!!, 0.001)
         assertEquals(0.75, metrics.ratios["kneeOverToeConfidence"]!!, 0.001)
+    }
+
+    private fun kneeOverToe(offset: Double) =
+        KneeOverToeMetrics(legIsLeft = true, confidence = 0.9f, ankleAngle = 80.0, normalizedKneeToeOffset = offset)
+
+    @Test
+    fun kneesPastToes_forTwoFrames_invalidatesRep() {
+        feed(170.0, 10.0)
+        arm()
+        engine.processFrame(95.0, 10.0, false, kneeOverToe(1.3))
+        engine.processFrame(95.0, 10.0, false, kneeOverToe(1.3)) // 2nd frame -> trips (and reaches depth)
+        val end = returnToStanding()
+
+        assertTrue(end.isRepCompleted)
+        assertFalse(end.isRepCorrect)
+        assertTrue(end.errors.contains(RepError.KNEES_PASS_TOES))
+    }
+
+    @Test
+    fun kneesUpToTheToeLine_areNotFlagged() {
+        feed(170.0, 10.0)
+        arm()
+        repeat(4) { engine.processFrame(95.0, 10.0, false, kneeOverToe(0.95)) }
+        val end = returnToStanding()
+
+        assertTrue(end.isRepCompleted)
+        assertTrue(end.isRepCorrect)
+        assertTrue(end.errors.isEmpty())
+    }
+
+    @Test
+    fun singleFrameKneesPastToes_doesNotInvalidateRep() {
+        feed(170.0, 10.0)
+        arm()
+        engine.processFrame(95.0, 10.0, false, kneeOverToe(1.3)) // one noisy frame
+        engine.processFrame(95.0, 10.0, false, kneeOverToe(0.8))
+        engine.processFrame(95.0, 10.0, false, kneeOverToe(0.8))
+        val end = returnToStanding()
+
+        assertTrue(end.isRepCorrect)
+        assertFalse(end.errors.contains(RepError.KNEES_PASS_TOES))
     }
 
     @Test

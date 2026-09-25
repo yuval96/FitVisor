@@ -262,19 +262,30 @@ object KinematicCalculator {
     ): Double = angleFromVertical(shoulder, hip, imageWidth, imageHeight)
 
     /**
-     * How far [knee] sits forward of [ankle], projected onto the ankle->
-     * [footIndex] direction and normalized by foot length (the ankle-to-toe
-     * distance) — a "knee-over-toe" signal in units of foot lengths: ~0 means
-     * the knee is directly above the ankle, and approaching/exceeding 1.0
-     * means it has traveled as far forward as the toe itself.
+     * How far [knee] sits forward of [ankle], as a fraction of how far the toe
+     * ([footIndex]) sits forward of the ankle -- horizontal (image X) distances
+     * only. 0 means the knee is directly above the ankle, 1.0 means it is
+     * directly above the toe tip, and above 1.0 means it has passed the toes.
      *
-     * Deliberately vector/foot-relative rather than a raw `knee.x > foot.x`
-     * comparison: since both vectors are derived from the same two body
-     * landmarks, the result is correct regardless of which way the user faces,
-     * front-camera mirroring, or distance from the camera (no absolute image
-     * coordinate or resolution dependence).
+     * Horizontal-only on purpose. This used to project the whole ankle->knee
+     * vector onto the whole ankle->toe vector, but the ankle landmark sits
+     * ~8cm above the floor while the toe is on it, so the foot vector slopes
+     * down and the (much longer) shank's vertical component dominated the
+     * projection: a knee exactly over the toes read ~0 instead of 1, and 1cm
+     * of vertical toe-landmark jitter moved the result by ~0.12 -- as much as
+     * the whole detection margin, so the check fired only sporadically.
+     * "Knee past toes" is a purely horizontal question; vertical noise now has
+     * no effect at all.
      *
-     * Returns [Double.NaN] for a degenerate (zero-length) foot vector.
+     * Still foot-relative rather than a raw `knee.x > foot.x` comparison: the
+     * sign comes from the foot's own direction, so it is correct regardless of
+     * which way the user faces or front-camera mirroring, and the ratio cancels
+     * distance from the camera.
+     *
+     * Returns [Double.NaN] when the foot's horizontal extent is smaller than
+     * its vertical extent on screen (see [MIN_FOOT_HORIZONTAL_RATIO]) -- the
+     * foot is pointing toward/away from the camera rather than seen side-on,
+     * so there is no meaningful forward axis and the division would blow up.
      */
     fun normalizedKneeToeOffset(
         knee: NormalizedLandmark,
@@ -283,44 +294,19 @@ object KinematicCalculator {
         imageWidth: Int,
         imageHeight: Int
     ): Double {
-        val footX = (footIndex.x() - ankle.x()) * imageWidth
-        val footY = (footIndex.y() - ankle.y()) * imageHeight
-        val footLength = kotlin.math.sqrt((footX * footX + footY * footY).toDouble())
-        if (footLength == 0.0) return Double.NaN
+        val footX = ((footIndex.x() - ankle.x()) * imageWidth).toDouble()
+        val footY = ((footIndex.y() - ankle.y()) * imageHeight).toDouble()
+        if (footX == 0.0 || abs(footX) < abs(footY) * MIN_FOOT_HORIZONTAL_RATIO) return Double.NaN
 
-        val kneeX = (knee.x() - ankle.x()) * imageWidth
-        val kneeY = (knee.y() - ankle.y()) * imageHeight
-
-        // Scalar projection of the knee vector onto the foot's forward axis.
-        val forwardDistance = (kneeX * footX + kneeY * footY) / footLength
-        return forwardDistance / footLength
+        val kneeX = ((knee.x() - ankle.x()) * imageWidth).toDouble()
+        return kneeX / footX
     }
 
     /**
-     * 3D generalization of [normalizedKneeToeOffset], using MediaPipe's
-     * real-world (metric) [Landmark] coordinates -- same "how many foot
-     * lengths forward" ratio, computed from real 3D vectors instead of a 2D
-     * image projection. No image width/height needed: world coordinates are
-     * already metric. Returns [Double.NaN] for a degenerate (zero-length)
-     * foot vector.
+     * Minimum |horizontal| / |vertical| ankle->toe extent on screen for
+     * [normalizedKneeToeOffset] to trust the foot's forward direction. 1.0 =
+     * the foot must appear at most 45 deg from horizontal; a side-on foot is
+     * typically ~2 (17cm forward vs ~8cm ankle height).
      */
-    fun normalizedKneeToeOffset3D(
-        knee: Landmark,
-        ankle: Landmark,
-        footIndex: Landmark
-    ): Double {
-        val footX = (footIndex.x() - ankle.x()).toDouble()
-        val footY = (footIndex.y() - ankle.y()).toDouble()
-        val footZ = (footIndex.z() - ankle.z()).toDouble()
-        val footLength = sqrt(footX * footX + footY * footY + footZ * footZ)
-        if (footLength == 0.0) return Double.NaN
-
-        val kneeX = (knee.x() - ankle.x()).toDouble()
-        val kneeY = (knee.y() - ankle.y()).toDouble()
-        val kneeZ = (knee.z() - ankle.z()).toDouble()
-
-        // Scalar projection of the knee vector onto the foot's forward axis.
-        val forwardDistance = (kneeX * footX + kneeY * footY + kneeZ * footZ) / footLength
-        return forwardDistance / footLength
-    }
+    private const val MIN_FOOT_HORIZONTAL_RATIO = 1.0
 }

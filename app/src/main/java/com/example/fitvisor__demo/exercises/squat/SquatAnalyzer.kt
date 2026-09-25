@@ -46,8 +46,9 @@ data class KneeOverToeMetrics(
  * on the right). Now there is exactly one leg identity per frame; a
  * knee-over-toe reading is only ever null when that same leg's
  * knee/ankle/foot-index specifically aren't confident enough this frame, not
- * because a different tracker chose a different leg. Same 3D-preferred, 2D-
- * fallback pattern as the primary angles.
+ * because a different tracker chose a different leg. The ankle angle uses the
+ * same 3D-preferred, 2D-fallback pattern as the primary angles; the knee-to-toe
+ * offset is always 2D (see [computeKneeOverToeMetrics]).
  *
  * @param use3D defaults on: squat is the exercise that motivated the 3D
  *   migration (2D knee-angle readings varied a lot between otherwise-
@@ -171,8 +172,14 @@ class SquatAnalyzer(
 
         val ankleAngle = worldAnkleAngle(kneeIndex, ankleIndex, footIndexIndex, knee, ankle, footIndex)
             ?: KinematicCalculator.calculateAngle(knee, ankle, footIndex, imageWidth, imageHeight)
-        val kneeToeOffset = worldKneeToeOffset(kneeIndex, ankleIndex, footIndexIndex, knee, ankle, footIndex)
-            ?: KinematicCalculator.normalizedKneeToeOffset(knee, ankle, footIndex, imageWidth, imageHeight)
+        // Always 2D, unlike the angles: it's a horizontal-position question
+        // in a side-on view, which the image X axis answers directly. There
+        // used to be a 3D-preferred variant, but the foot-index landmark's
+        // confidence hovers right around the 3D trust bar, so the offset
+        // flipped between two differently-biased computations frame to frame
+        // and broke the 2-frame debounce streak.
+        val kneeToeOffset =
+            KinematicCalculator.normalizedKneeToeOffset(knee, ankle, footIndex, imageWidth, imageHeight)
 
         return KneeOverToeMetrics(
             legIsLeft = useLeft,
@@ -195,21 +202,6 @@ class SquatAnalyzer(
         val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
         val footIndex = worldLandmarks.getOrNull(footIndexIndex) ?: return null
         return KinematicCalculator.calculateAngle3D(knee, ankle, footIndex).takeUnless { it.isNaN() }
-    }
-
-    /**
-     * 3D normalized knee-to-toe offset from [worldLandmarks], or null if
-     * unavailable or not confidently observed; see [worldKneeAngle].
-     */
-    private fun worldKneeToeOffset(
-        kneeIndex: Int, ankleIndex: Int, footIndexIndex: Int,
-        knee2D: NormalizedLandmark, ankle2D: NormalizedLandmark, footIndex2D: NormalizedLandmark
-    ): Double? {
-        if (!LandmarkConfidence.trustedForWorldLandmarks(knee2D, ankle2D, footIndex2D)) return null
-        val knee = worldLandmarks.getOrNull(kneeIndex) ?: return null
-        val ankle = worldLandmarks.getOrNull(ankleIndex) ?: return null
-        val footIndex = worldLandmarks.getOrNull(footIndexIndex) ?: return null
-        return KinematicCalculator.normalizedKneeToeOffset3D(knee, ankle, footIndex).takeUnless { it.isNaN() }
     }
 
     override fun resetEngine() {

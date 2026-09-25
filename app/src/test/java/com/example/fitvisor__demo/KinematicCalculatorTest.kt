@@ -126,6 +126,47 @@ class KinematicCalculatorTest {
         assertEquals(1.0, offset, 0.01)
     }
 
+    /**
+     * Realistic geometry: the ankle landmark sits above the floor while the
+     * toe is on it, so the ankle->toe vector slopes down, and the knee is far
+     * above both. Regression: the old full-vector projection read ~0 here
+     * (the shank's vertical component swamped the forward distance) even
+     * though the knee is exactly over the toe tip.
+     */
+    @Test
+    fun kneeToeOffset_slopedFoot_kneeAboveToeTip_isOne() {
+        val offset = KinematicCalculator.normalizedKneeToeOffset(
+            knee = lm(0.67f, 0.13f),     // 42 units above the floor, directly over the toe
+            ankle = lm(0.50f, 0.47f),    // 8 units above the floor
+            footIndex = lm(0.67f, 0.55f), // toe on the floor, 17 units forward
+            size, size
+        )
+        assertEquals(1.0, offset, 0.01)
+    }
+
+    /** Vertical jitter of the toe landmark used to swing the result by ~0.12 per unit; now it has no effect. */
+    @Test
+    fun kneeToeOffset_isInsensitiveToVerticalToeJitter() {
+        val knee = lm(0.72f, 0.15f)
+        val ankle = lm(0.50f, 0.47f)
+        val low = KinematicCalculator.normalizedKneeToeOffset(knee, ankle, lm(0.67f, 0.57f), size, size)
+        val high = KinematicCalculator.normalizedKneeToeOffset(knee, ankle, lm(0.67f, 0.53f), size, size)
+        assertEquals(low, high, 1e-9)
+        assertTrue(low > 1.0) // knee 5 units past the toe
+    }
+
+    /** Foot pointing at the camera (mostly vertical on screen): no usable forward axis. */
+    @Test
+    fun kneeToeOffset_footNotSideOn_returnsNaN() {
+        val offset = KinematicCalculator.normalizedKneeToeOffset(
+            knee = lm(0.52f, 0.13f),
+            ankle = lm(0.50f, 0.47f),
+            footIndex = lm(0.51f, 0.55f), // 1 unit sideways vs 8 units down
+            size, size
+        )
+        assertTrue(offset.isNaN())
+    }
+
     @Test
     fun kneeToeOffset_degenerateFoot_returnsNaN() {
         val offset = KinematicCalculator.normalizedKneeToeOffset(

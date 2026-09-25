@@ -49,11 +49,15 @@ class SquatRuleEngine {
         // user having moved. See BicepsCurlRuleEngine's REP_START_ELBOW for
         // the same pattern.
         private const val REP_START_THRESHOLD = 150.0
-        private const val SQUAT_DOWN_THRESHOLD = 110.0
+        private const val SQUAT_DOWN_THRESHOLD = 100.0
         private const val SQUAT_UP_THRESHOLD = 160.0
         private const val MAX_TORSO_INCLINATION = 45.0
 
-        private const val KNEE_TOE_OFFSET_LIMIT = 0.2
+        // In units of the ankle->toe forward distance (see
+        // KinematicCalculator.normalizedKneeToeOffset): 1.0 = the knee joint
+        // is directly above the toe tip, so anything beyond it has passed
+        // the toes.
+        private const val KNEE_TOE_OFFSET_LIMIT = 1.0
     }
 
     enum class State {
