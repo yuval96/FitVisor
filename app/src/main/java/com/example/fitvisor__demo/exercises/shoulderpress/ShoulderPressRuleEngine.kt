@@ -54,10 +54,15 @@ import kotlin.math.abs
  *  - [RepError.INSUFFICIENT_ELBOW_EXTENSION] a genuine press attempt (PRESSING
  *                                           sustained for [PRESSING_SUSTAIN_FRAMES]
  *                                           consecutive frames) returns to
- *                                           START without ever reaching
- *                                           lockout. A single-frame blip
- *                                           crossing [START_ELBOW_MAX] that
- *                                           never sustains is still silently
+ *                                           the rack without ever reaching
+ *                                           lockout. "Press started" is
+ *                                           measured relative to the user's
+ *                                           own rack angle (see
+ *                                           [pressStartThreshold]), so a
+ *                                           half press is caught, not just
+ *                                           one that stalls just short of
+ *                                           lockout. A brief blip that never
+ *                                           sustains is still silently
  *                                           discarded, not scored.
  *
  * A completed repetition is correct iff none of the above faults were raised
@@ -105,15 +110,35 @@ class ShoulderPressRuleEngine {
         private const val ASYMMETRY_CONSEC_FRAMES = 2
 
         // A press attempt must sustain PRESSING for this many consecutive
-        // frames before a return to START without lockout is scored as a
-        // fault rather than treated as harmless jitter right at the START
-        // boundary. The fastest possible "stable return to START" from
+        // frames before a return to the rack without lockout is scored as a
+        // fault rather than treated as harmless jitter right at the rack
+        // boundary. The fastest possible "stable return to the rack" from
         // PRESSING already takes 3 total PRESSING-state frames (entry frame
-        // + the 2 consecutive frames startPoseGate itself needs) -- setting
+        // + the 2 consecutive frames rackReturnGate itself needs) -- setting
         // this to 3 exactly filters that absolute-minimum bounce, while
         // anything held even one frame longer (i.e. any real, if brief,
         // press) still gets scored.
         private const val PRESSING_SUSTAIN_FRAMES = 3
+
+        // Partial-press detection, relative to the user's own rack angle
+        // (rackElbow). START_ELBOW_MAX alone used to be the only "press
+        // started" boundary, but a half press (elbow ~115-130) keeps the
+        // elbows inside the shoulder-height tolerance and under 135, so it
+        // was indistinguishable from still being racked: it was neither
+        // counted nor faulted, and INSUFFICIENT_ELBOW_EXTENSION could only
+        // ever fire in the 135-150 strip right below lockout.
+        //
+        // A press has started once the elbow opens PRESS_START_RISE past the
+        // rack angle, and is back at the rack once within PRESS_START_RISE -
+        // RACK_RETURN_GAP of it (a 10 deg hysteresis gap). Relative rather
+        // than absolute on purpose: after a normal rep completes on the way
+        // down (~130), a slow lowering would otherwise cross a fixed
+        // threshold while already back in START, register as a new press,
+        // and fault on reaching the rack -- a phantom incorrect rep after
+        // every slow rep. The learned rack angle follows the lowering down
+        // instead, and it also adapts to wider/narrower grips.
+        private const val PRESS_START_RISE = 20.0
+        private const val RACK_RETURN_GAP = 10.0
 
         private const val WARNING_TORSO = "Keep your torso upright"
         private const val WARNING_ELBOWS_HEIGHT = "Bring elbows to shoulder height"
@@ -162,6 +187,19 @@ class ShoulderPressRuleEngine {
      * the state machine never consults it.
      */
     private val pressingGate = ConsecutiveGate(PRESSING_SUSTAIN_FRAMES)
+
+    /**
+     * The user's rack angle for the current START phase: the lowest elbow
+     * angle held for 2 consecutive racked frames, so a single low outlier
+     * frame can't drag it down. NaN until learned; re-learned on every return
+     * to START. See [pressStartThreshold].
+     */
+    private var rackElbow = Double.NaN
+    private var prevRackedElbow = Double.NaN
+
+    /** Debounces the relative "press started" / "back at the rack" boundaries. */
+    private val pressStartGate = ConsecutiveGate()
+    private val rackReturnGate = ConsecutiveGate()
 
     private val errors = linkedSetOf<RepError>()
     private val frameRecorder = RepFrameRecorder()
@@ -222,6 +260,24 @@ class ShoulderPressRuleEngine {
             !elbowShoulderVertical.isNaN() && abs(elbowShoulderVertical) <= heightTol
         val startPose =
             elbowAtShoulder && !elbowAngle.isNaN() && elbowAngle <= START_ELBOW_MAX
+        // TODO(known bug, deferred 2026-09-26 while mid on-device testing):
+        //  arms hanging straight down at the sides also satisfy this (elbow
+        //  ~170), so after a set has started, dropping the arms and then
+        //  re-racking is counted as a *correct* rep (START -> PRESSING ->
+        //  TOP_REACHED -> LOWERING -> START). ARMS_NOT_VERTICAL can't catch
+        //  it: angleFromVertical uses abs(deltaY), so arms pointing down read
+        //  as perfectly vertical. Planned fix:
+        //   1. topPose also requires the elbows above the shoulders
+        //      (elbowShoulderVertical < 0); at a real lockout they're well
+        //      above, when hanging well below.
+        //   2. The legacy START -> PRESSING path
+        //      (!startPose && elbowAngle > START_ELBOW_MAX) also requires
+        //      elbowNotBelowShoulder, like the relative path already does --
+        //      otherwise fix 1 just turns the phantom correct rep into a
+        //      phantom INSUFFICIENT_ELBOW_EXTENSION one.
+        //   3. Regression tests: drop arms + re-rack (95 -> 160 -> 170 with
+        //      elbowShoulderVertical ~+0.2 -> 95) must not complete a rep;
+        //      also arms straight out to the sides (T-pose).
         val topPose =
             !elbowAngle.isNaN() && elbowAngle >= TOP_ELBOW_MIN
         val stableStart = startPoseGate.update(startPose)
@@ -233,6 +289,27 @@ class ShoulderPressRuleEngine {
             sawStart = true
             startElbowShoulder = elbowShoulderVertical
         }
+
+        // Learn the rack angle while racked in START (see rackElbow).
+        if (currentState == State.START && startPose) {
+            if (!prevRackedElbow.isNaN()) {
+                rackElbow = minKeepNaN(rackElbow, maxOf(elbowAngle, prevRackedElbow))
+            }
+            prevRackedElbow = elbowAngle
+        } else {
+            prevRackedElbow = Double.NaN
+        }
+        val pressStart = pressStartThreshold()
+        // A press moves the elbows up; arms lowered toward the sides can open
+        // the elbow too, so that must never read as a press.
+        val elbowNotBelowShoulder =
+            !elbowShoulderVertical.isNaN() && elbowShoulderVertical <= heightTol
+        val stablePressStart = pressStartGate.update(
+            !elbowAngle.isNaN() && elbowAngle > pressStart && elbowNotBelowShoulder
+        )
+        val stableRackReturn = rackReturnGate.update(
+            elbowAtShoulder && !elbowAngle.isNaN() && elbowAngle <= pressStart - RACK_RETURN_GAP
+        )
 
         val repActive = sawStart
 
@@ -303,7 +380,9 @@ class ShoulderPressRuleEngine {
                     currentState = State.TOP_REACHED
                     topReached = true
                     topElbow = elbowAngle
-                } else if (repActive && !startPose && elbowAngle > START_ELBOW_MAX) {
+                } else if (repActive &&
+                    ((!startPose && elbowAngle > START_ELBOW_MAX) || stablePressStart)
+                ) {
                     currentState = State.PRESSING
                 }
             }
@@ -315,12 +394,12 @@ class ShoulderPressRuleEngine {
                         topReached = true
                         topElbow = elbowAngle
                     }
-                    stableStart -> {
-                        // Returned to START without ever reaching lockout.
+                    stableRackReturn -> {
+                        // Returned to the rack without ever reaching lockout.
                         // Only score this as a faulted repetition if PRESSING
                         // was actually sustained for a couple of frames;
-                        // otherwise it's a single-frame blip crossing
-                        // START_ELBOW_MAX and stays uncounted, as before.
+                        // otherwise it's a brief blip past the press-start
+                        // boundary and stays uncounted, as before.
                         if (!topReached && pressingSustained) {
                             errors.add(RepError.INSUFFICIENT_ELBOW_EXTENSION)
                             isRepCompleted = true
@@ -328,6 +407,7 @@ class ShoulderPressRuleEngine {
                             resultWarning = completionWarning()
                         }
                         currentState = State.START
+                        resetRackTracking()
                     }
                 }
             }
@@ -413,6 +493,23 @@ class ShoulderPressRuleEngine {
         else -> null
     }
 
+    /**
+     * Elbow angle past which a press counts as started: [PRESS_START_RISE]
+     * above the learned [rackElbow], capped at [START_ELBOW_MAX] (the old
+     * fixed boundary, so a very open rack is never worse off than before).
+     * Falls back to [START_ELBOW_MAX] until the rack angle has been learned.
+     */
+    private fun pressStartThreshold(): Double =
+        if (rackElbow.isNaN()) START_ELBOW_MAX
+        else minOf(rackElbow + PRESS_START_RISE, START_ELBOW_MAX)
+
+    private fun resetRackTracking() {
+        rackElbow = Double.NaN
+        prevRackedElbow = Double.NaN
+        pressStartGate.reset()
+        rackReturnGate.reset()
+    }
+
     /** Body-relative shoulder-height tolerance, floored for small/distant subjects. */
     private fun startHeightTolerance(bodyScale: Double): Double {
         val ratioTol =
@@ -460,6 +557,7 @@ class ShoulderPressRuleEngine {
         armsVerticalGate.reset()
         asymmetryGate.reset()
         pressingGate.reset()
+        resetRackTracking()
         errors.clear()
         frameRecorder.reset()
         resetDebug()
@@ -491,6 +589,7 @@ class ShoulderPressRuleEngine {
         armsVerticalGate.reset()
         asymmetryGate.reset()
         pressingGate.reset()
+        resetRackTracking()
         errors.clear()
         frameRecorder.reset()
         resetDebug()

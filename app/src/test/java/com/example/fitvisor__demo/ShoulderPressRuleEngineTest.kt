@@ -120,7 +120,9 @@ class ShoulderPressRuleEngineTest {
     }
 
     @Test
-    fun partialPress_neverReachingTop_doesNotCount() {
+    fun singleFramePress_neverReachingTop_doesNotCount() {
+        // A held partial press *is* scored (see the insufficient-extension
+        // tests below); a single frame past the rack is not.
         establishStart()
         feed(140.0, elbowShoulderVertical = -0.20)   // pressed, but elbow < 150
         val back = feed(100.0, elbowShoulderVertical = 0.0) // back to shoulder height
@@ -310,7 +312,7 @@ class ShoulderPressRuleEngineTest {
     fun tinyJitterNearStart_doesNotCountAsIncorrect() {
         // The fastest possible PRESSING->START round trip: a single frame
         // crossing the START boundary, immediately followed by the 2
-        // consecutive frames startPoseGate itself needs to call it a stable
+        // consecutive frames rackReturnGate itself needs to call it a stable
         // return. This bare minimum must never be scored as a fault -- only
         // an attempt held for at least one frame longer should be (see
         // clearPressAttempt_neverReachingTop_countsOneIncorrect).
@@ -318,6 +320,82 @@ class ShoulderPressRuleEngineTest {
         feed(138.0, elbowShoulderVertical = -0.05) // barely past START, well short of a real press
         feed(100.0, elbowShoulderVertical = 0.0)
         val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertFalse(end.isRepCompleted)
+        assertEquals("START", end.phaseName)
+    }
+
+    @Test
+    fun halfPress_belowOldBoundary_countsInsufficientExtension() {
+        // Regression: "press started" used to be a fixed elbow > 135, so a
+        // half press to ~125 -- elbows still inside the shoulder-height
+        // tolerance -- looked exactly like being racked: neither counted
+        // nor faulted. It's now relative to the rack angle (100 -> 120).
+        establishStart()
+        repeat(4) { feed(125.0, elbowShoulderVertical = -0.05) }
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertTrue(end.isRepCompleted)
+        assertFalse(end.isRepCorrect)
+        assertTrue(end.errors.contains(RepError.INSUFFICIENT_ELBOW_EXTENSION))
+    }
+
+    @Test
+    fun slowLoweringAfterFullRep_doesNotScorePhantomPartialPress() {
+        // A full rep completes on the way down (~130, still above a fixed
+        // ~115 press-start line). A slow lowering then crosses 125..116
+        // while already back in START; with an absolute threshold that read
+        // as a new press and faulted on reaching the rack. The learned rack
+        // angle follows the lowering down instead.
+        establishStart()
+        reachTop()
+        feed(145.0, elbowShoulderVertical = -0.10) // lowering
+        feed(130.0, elbowShoulderVertical = 0.0)
+        val rep = feed(128.0, elbowShoulderVertical = 0.0)
+        assertTrue(rep.isRepCompleted)
+        assertTrue(rep.isRepCorrect)
+
+        var extra = 0
+        for (elbow in listOf(126.0, 124.0, 122.0, 120.0, 118.0, 116.0, 112.0, 108.0, 104.0, 100.0, 100.0, 100.0)) {
+            if (feed(elbow, elbowShoulderVertical = 0.0).isRepCompleted) extra++
+        }
+        assertEquals(0, extra)
+    }
+
+    @Test
+    fun armsLoweredBelowShoulders_halfBent_isNotAPress() {
+        // Dropping the arms toward the sides can open the elbow just like a
+        // press does, but the elbows move down, not up.
+        establishStart()
+        repeat(4) { feed(125.0, elbowShoulderVertical = 0.25) }
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertFalse(end.isRepCompleted)
+    }
+
+    @Test
+    fun twoFrameBlipAboveRack_isIgnored() {
+        establishStart()
+        feed(125.0, elbowShoulderVertical = -0.05)
+        feed(125.0, elbowShoulderVertical = -0.05) // enters PRESSING on this (debounced) frame
+        feed(100.0, elbowShoulderVertical = 0.0)
+        val end = feed(100.0, elbowShoulderVertical = 0.0)
+
+        assertFalse(end.isRepCompleted)
+        assertEquals("START", end.phaseName)
+    }
+
+    @Test
+    fun openRack_smallWobble_isNotAPress() {
+        // The press-start boundary is personal: from a wide-grip rack at 118
+        // it sits at the old 135 cap, so a wobble to 125 is not a press.
+        feed(118.0)
+        feed(118.0)
+        repeat(4) { feed(125.0, elbowShoulderVertical = -0.05) }
+        feed(118.0)
+        val end = feed(118.0)
 
         assertFalse(end.isRepCompleted)
         assertEquals("START", end.phaseName)
